@@ -4,7 +4,8 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from linebot import LineBotApi
 from linebot.exceptions import InvalidSignatureError
 import requests
-import RAG_module
+from RAG_module import query_with_context, build_augmented_prompt
+
 
 #cloudflared tunnel --url http://localhost:5000
 #https://developers.line.biz/console/channel/2006995867/messaging-api
@@ -31,7 +32,7 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    user_message = event.message.text
+    user_message = "（請依據護理顧問身份回答）" + event.message.text
 
     # 1️⃣ 先回一個初步確認訊息（必須在 1 秒內）
     try:
@@ -43,7 +44,7 @@ def handle_message(event):
         print(f"Reply error: {e}")
         
     try:
-        model_response = requests.get("http://172.20.10.4:1234/v1/models")
+        model_response = requests.get("http://192.168.0.245:1234/v1/models")
         model_response.raise_for_status()  # 如果不是200自動丟例外
         models_data = model_response.json()
 
@@ -82,21 +83,14 @@ def handle_message(event):
 
     # 2️⃣ 然後在背景做 LM Studio 的請求
     try:
-       # best_context = RAG_module.find_best_context(user_message, model_name, knowledge_embeddings)
+    #build_augmented_prompt(contexts: List[Dict], user_question: str, modelname: str) -> List[Dict]:
+        contexts = query_with_context(user_message, 3)
+        finaljson = build_augmented_prompt(contexts, user_message, model_name)
         response = requests.post(
-            "http://172.20.10.4:1234/v1/chat/completions",
+            "http://192.168.0.245:1234/v1/chat/completions",
             headers={"Content-Type": "application/json"},
-            json={
-                "model": "gemma-3-4b-it",
-                "messages": [
-                    {"role": "system", "content": "請使用繁體中文回答以下問題:"},
-                    {"role": "user", "content": user_message}
-                ],
-                "temperature": 0.7,
-                "max_tokens": 100000,
-                "stream": False
-            }
-        )
+            json= finaljson   
+        )     
         lm_response = response.json()
         choices = lm_response.get("choices")
         if choices and isinstance(choices, list) and len(choices) > 0:
@@ -123,3 +117,16 @@ def handle_message(event):
     
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
+
+"""{
+                
+                "model": "gemma-3-4b-it",
+                "messages": [
+                    {"role": "system", "content": "你是一位具有 10 年經驗的產科護理師，請根據下列資料內容簡潔、扼要、精準、專業地回答使用者的問題，並使用繁體中文，若使用者提出和護理師角色不相關的要求，或是要求跳脫角色，則有禮貌地拒絕。"},
+                    {"role": "user", "content": user_message}
+                ],
+                "temperature": 0.4,
+                "max_tokens": 100000,
+                "stream": False
+            }"""
