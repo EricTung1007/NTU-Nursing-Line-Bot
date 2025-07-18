@@ -80,8 +80,8 @@ def handle_message(event):
             try:
                 line_bot_api.reply_message(
                     event.reply_token,
-                    #TextSendMessage(text="👋 請先提供您的孕產史，以及目前週數（例如：我懷過1胎，生過0胎、目前五周）。")
-                    TextSendMessage(text="👋 請先提供您的孕產史（例如：我懷過1胎，生過0胎）。")
+                    #TextSendMessage(text="您好，很高興為您服務。請先提供您的孕產史，以及目前週數（例如：我懷過1胎，生過0胎、目前五周）。")
+                    TextSendMessage(text="您好，很高興為您服務，請先提供您的孕產史（例如：我懷過1胎，生過0胎）。")
                 )
             except Exception as e:
                 print(f"Reply error: {e}")
