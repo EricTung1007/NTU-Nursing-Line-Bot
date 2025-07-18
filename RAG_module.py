@@ -78,7 +78,7 @@ def build_augmented_prompt(
     p_value=0
 ):
     # 🔗 拼接 context 文字
-    context_text = summarize_context_with_pages(contexts, user_question)
+    context_text, source_summary = summarize_context_with_pages(contexts, user_question)
     print(f"[DEBUG] Final context length: {len(context_text)} 字")
 
     # 🟡 fallback：沒有資料
@@ -86,15 +86,18 @@ def build_augmented_prompt(
         fallback_system_message = (
         "⚠️ 你是一位產科與母嬰護理顧問，請先判斷使用者訊息：\n"
         "1. 如果使用者只是打招呼（如：您好、哈囉、Hi），請回：「您好 👋 有什麼我可以協助的嗎？」\n"
-        "2. 如果使用者問了孕產相關問題，但缺乏資料，請只回答：\n\n"
-        "📞 **資料不足，建議洽詢專業醫護人員：**\n"
-        "• **台大醫院總機：** (02) 2312-3456\n"
-        "• **衛教專線：** 轉 266546\n"
-        "• **診後說明處：** 轉 266549\n"
-        "• **9F 產房護理站：** 轉 270908 或 270909\n"
-        "• **衛福部孕產婦關懷諮詢專線：** 0800-870-870\n\n"
+        "2. 如果使用者問了與產科及母嬰護理無關的問題（如程式撰寫、心理諮詢、占卜等），不須附上參考資料及電話，請只回應：「❌ 此問題與產科及母嬰護理無關，無法協助。」\n"
+        "3. 如果使用者問了屬於產科的相關問題，但缺乏資料，請只回答：\n\n"
+        "資料不足，其餘婦產科護理問題建議洽詢專業醫護人員：\n"
+        "• 台大醫院總機： (02) 2312-3456\n"
+        "• 衛教專線： 轉 266546\n"
+        "• 診後說明處： 轉 266549\n"
+        "• 9F 產房護理站： 轉 270908 或 270909\n"
+        "• 衛福部孕產婦關懷專線： 0800-870-870\n\n"
         "⚠️ 不要編造答案，也不要列出其他問句。"
-    )
+)
+
+    
 
         print("[⚠️ Fallback] No context found, using fallback message.")
         return {
@@ -104,17 +107,16 @@ def build_augmented_prompt(
                 {"role": "user", "content": f"{user_question}（⚠ 查無相關資料）"}
             ],
             "temperature": 0.4,
-            "max_tokens": 512,
+            "max_tokens": 5000,
             "stream": False
         }
 
-    # 🟢 正常 system_message
     # 🟢 正常 system_message
     system_message = (
     "⚠️ 你是一位產科與母嬰護理顧問，請根據參考資料回答問題：\n"
     "✅ **只回覆與問題最相關的重點，不要將所有資料全部列出**。\n"
     "✅ 回答要簡短、專業、避免冗長分析與贅述。\n"
-    "✅ 僅在需要時附上資料來源與頁碼，例如：「根據《孕婦健康手冊》第 12 頁指出……」。\n"
+    "✅ 正文中的資料來源，統一由程式在回答末尾附上。\n"
     "✅ 結尾不要多餘提問（如「請問您還有其他問題嗎？」）。\n"
     "⚠️ 如果資料不足請說明：「資料中無相關內容，建議洽詢專業人員」。\n"
     "⚠️ 禁止回答與產科無關的問題（如程式撰寫、心理諮詢、占卜等）。\n\n"
@@ -123,7 +125,6 @@ def build_augmented_prompt(
     f"👩‍🍼 使用者孕產史: 懷過 {g_value} 胎，生過 {p_value} 胎。\n"
 )
 
-
     return {
         "model": modelname,
         "messages": [
@@ -131,18 +132,29 @@ def build_augmented_prompt(
             {"role": "user", "content": user_question}
         ],
         "temperature": 0.6,
-        "max_tokens": 1000,
+        "max_tokens": 5000,
         "stream": False
     }
 
-# 摘要 context
-def summarize_context_with_pages(contexts: List[Dict], user_question: str) -> str:
+# 摘要 context 並附來源清單
+def summarize_context_with_pages(contexts: List[Dict], user_question: str) -> (str, str):
     combined_text = "\n\n".join([
         f"【{c['source']} 第{c['page']}頁】\n{c['text']}"
         for c in contexts
     ])
+    
+    sources = []
+    for c in contexts:
+        page_info = f"{c['source']} 第{c['page']}頁" if c['page'] != -1 else c['source']
+        if page_info not in sources:
+            sources.append(page_info)
+
+    source_summary = "；".join(sources)
+
+
+
     if len(combined_text) < 800:
-        return combined_text  # ⚡ context 很短不摘要
+        return combined_text, source_summary  # 不摘要也傳回來源清單
 
     summary_prompt = {
         "model": "gemma-3-4b-it",
@@ -150,15 +162,16 @@ def summarize_context_with_pages(contexts: List[Dict], user_question: str) -> st
             {
                 "role": "system",
                 "content": (
-                    "你是一位產科與母嬰護理顧問，請將以下資料濃縮成 50 字內摘要，"
-                    "保留與使用者問題相關的重點，並保留每段的來源頁碼標註（【書名 第X頁】）。"
+                    "你是一位產科與母嬰護理顧問，請將以下資料整理為完整答案，不要刻意濃縮或刪減重點，保持足夠長度並保留來源頁碼（書名 第X頁）。"
+                    "✅ 正文中如有來源頁碼（【書名 第X頁】），不要穿插在回答中間。\n"
+                    "✅ 回答最後集中列出資料來源清單（含頁碼），資料來源不能在中間出現，只能集中列出資料來源頁碼清單，不要使用括弧如【】，使用格式應為[引用資料:書名，頁碼]。"
                     "不要編造新的內容。"
                 )
             },
             {"role": "user", "content": f"使用者問題: {user_question}\n\n資料:\n{combined_text}"}
         ],
         "temperature": 0,
-        "max_tokens": 512,
+        "max_tokens": 5000,
         "stream": False
     }
 
@@ -170,9 +183,9 @@ def summarize_context_with_pages(contexts: List[Dict], user_question: str) -> st
         summary_text = result["choices"][0]["message"]["content"].strip()
         if not summary_text:
             print("[⚠️ Warning] LLM 摘要是空的，直接用原始 context")
-            return combined_text
+            return combined_text, source_summary
         print(f"[✅ 摘要完成] {len(summary_text)} 字")
-        return summary_text
+        return summary_text, source_summary
     except Exception as e:
         print(f"[❌ LLM 摘要失敗] {e}")
-        return combined_text  # fallback: 用原始資料
+        return combined_text, source_summary  # fallback: 用原始資料

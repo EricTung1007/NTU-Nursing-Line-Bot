@@ -31,4 +31,10 @@ answering model
 
 running in said order.
 
-then
+then test via line.
+
+#to add file into database:
+i used jsonl to save all my data into combine.jsonl.
+tools are in adding data.
+run factory to make pdf to jsonl with page and title.
+run glue to glue

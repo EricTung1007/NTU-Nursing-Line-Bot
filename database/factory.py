@@ -2,7 +2,7 @@ import fitz  # PyMuPDF
 import json
 from pathlib import Path
 
-target = "準爸爸手冊"
+target = "準爸爸手冊"# change the target here
 
 pdf_path = Path(f"{target}.pdf")
 doc = fitz.open(str(pdf_path))  # 要轉成 str 才能給 fitz

@@ -1,3 +1,4 @@
+
 from flask import Flask, request, abort
 from linebot import WebhookHandler
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
@@ -118,7 +119,7 @@ def handle_message(event):
         print(f"取得模型失敗: {e}")
 
     system_message = (
-        "⚠️ 你是一位產科與母嬰護理顧問，請根據上下文專業、簡潔回答問題，不要重複提醒孕產史。"
+        "⚠️ 你是一位產科與母嬰護理顧問，請根據上下文專業、回答問題，不要重複提醒孕產史。"
         "如果資料不足，請說明「資料不足」，不要編造內容。"
     )
 

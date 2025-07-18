@@ -78,7 +78,7 @@ def build_augmented_prompt(
     p_value=0
 ):
     # 🔗 拼接 context 文字
-    context_text = summarize_context_with_pages(contexts, user_question)
+    context_text, source_summary = summarize_context_with_pages(contexts, user_question)
     print(f"[DEBUG] Final context length: {len(context_text)} 字")
 
     # 🟡 fallback：沒有資料
@@ -92,7 +92,7 @@ def build_augmented_prompt(
         "• **衛教專線：** 轉 266546\n"
         "• **診後說明處：** 轉 266549\n"
         "• **9F 產房護理站：** 轉 270908 或 270909\n"
-        "• **衛福部孕產婦關懷諮詢專線：** 0800-870-870\n\n"
+        "• **衛福部孕產婦關懷專線：** 0800-870-870\n\n"
         "⚠️ 不要編造答案，也不要列出其他問句。"
     )
 
@@ -109,12 +109,11 @@ def build_augmented_prompt(
         }
 
     # 🟢 正常 system_message
-    # 🟢 正常 system_message
     system_message = (
     "⚠️ 你是一位產科與母嬰護理顧問，請根據參考資料回答問題：\n"
     "✅ **只回覆與問題最相關的重點，不要將所有資料全部列出**。\n"
     "✅ 回答要簡短、專業、避免冗長分析與贅述。\n"
-    "✅ 僅在需要時附上資料來源與頁碼，例如：「根據《孕婦健康手冊》第 12 頁指出……」。\n"
+    "✅ 正文中不要主動加來源，資料來源統一由程式在回答末尾附上。\n"
     "✅ 結尾不要多餘提問（如「請問您還有其他問題嗎？」）。\n"
     "⚠️ 如果資料不足請說明：「資料中無相關內容，建議洽詢專業人員」。\n"
     "⚠️ 禁止回答與產科無關的問題（如程式撰寫、心理諮詢、占卜等）。\n\n"
@@ -122,7 +121,6 @@ def build_augmented_prompt(
     f"🗂 過往對話紀錄:\n{history_text}\n\n"
     f"👩‍🍼 使用者孕產史: 懷過 {g_value} 胎，生過 {p_value} 胎。\n"
 )
-
 
     return {
         "model": modelname,
@@ -135,14 +133,22 @@ def build_augmented_prompt(
         "stream": False
     }
 
-# 摘要 context
-def summarize_context_with_pages(contexts: List[Dict], user_question: str) -> str:
+# 摘要 context 並附來源清單
+def summarize_context_with_pages(contexts: List[Dict], user_question: str) -> (str, str):
     combined_text = "\n\n".join([
         f"【{c['source']} 第{c['page']}頁】\n{c['text']}"
         for c in contexts
     ])
+
+    sources = set()
+    for c in contexts:
+        page_info = f"{c['source']}（第{c['page']}頁）" if c['page'] != -1 else c['source']
+        sources.add(page_info)
+
+    source_summary = "；".join(sources)
+
     if len(combined_text) < 800:
-        return combined_text  # ⚡ context 很短不摘要
+        return combined_text, source_summary  # 不摘要也傳回來源清單
 
     summary_prompt = {
         "model": "gemma-3-4b-it",
@@ -150,9 +156,8 @@ def summarize_context_with_pages(contexts: List[Dict], user_question: str) -> st
             {
                 "role": "system",
                 "content": (
-                    "你是一位產科與母嬰護理顧問，請將以下資料濃縮成 50 字內摘要，"
-                    "保留與使用者問題相關的重點，並保留每段的來源頁碼標註（【書名 第X頁】）。"
-                    "不要編造新的內容。"
+                    "你是一位產科與母嬰護理顧問，請將以下資料濃縮成 100 字內摘要，"
+                    "僅保留與使用者問題相關的重點，不要編造新的內容。"
                 )
             },
             {"role": "user", "content": f"使用者問題: {user_question}\n\n資料:\n{combined_text}"}
@@ -170,9 +175,9 @@ def summarize_context_with_pages(contexts: List[Dict], user_question: str) -> st
         summary_text = result["choices"][0]["message"]["content"].strip()
         if not summary_text:
             print("[⚠️ Warning] LLM 摘要是空的，直接用原始 context")
-            return combined_text
+            return combined_text, source_summary
         print(f"[✅ 摘要完成] {len(summary_text)} 字")
-        return summary_text
+        return summary_text, source_summary
     except Exception as e:
         print(f"[❌ LLM 摘要失敗] {e}")
-        return combined_text  # fallback: 用原始資料
+        return combined_text, source_summary  # fallback: 用原始資料
