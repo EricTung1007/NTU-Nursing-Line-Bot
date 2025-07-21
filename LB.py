@@ -1,179 +1,288 @@
-
 from flask import Flask, request, abort
-from linebot import WebhookHandler
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
-from linebot import LineBotApi
-from linebot.exceptions import InvalidSignatureError
 import requests
+import hmac
+import hashlib
+import base64
+import json
 import re
+
 from RAG_module import query_with_context, build_augmented_prompt
 from memory_module import (
-    is_new_user, create_memory_file, append_to_memory,
-    read_memory, update_memory_gp, extract_gp_from_text
+    append_to_memory, read_memory, update_memory_gp,get_memory_file_path,
+    LLM_extract_from_text, update_memory_weeks, update_memory_isdad, update_memory_name
 )
 
 app = Flask(__name__)
-LMStudioIp = "http://127.0.0.1:1234/"
-CHANNEL_ACCESS_TOKEN = 'SL10e9svEqBH/z1GZy0gBTFXijWTa31VfEmOTh9RfwrQIWHt0vWSCBHnYjsvpvPXVbOShqHnFoSAts0u2Uu1faCZZnmhDGwGV+vdzeQnclya3n8EmKBhg9D3vv/7cbST9jqf/CD1eWghmNGemLm4BAdB04t89/1O/w1cDnyilFU='
-CHANNEL_SECRET = '7810e950994952b0c7e288d593587fe8'
+CHANNEL_ACCESS_TOKEN = "SL10e9svEqBH/z1GZy0gBTFXijWTa31VfEmOTh9RfwrQIWHt0vWSCBHnYjsvpvPXVbOShqHnFoSAts0u2Uu1faCZZnmhDGwGV+vdzeQnclya3n8EmKBhg9D3vv/7cbST9jqf/CD1eWghmNGemLm4BAdB04t89/1O/w1cDnyilFU="
+CHANNEL_SECRET = "7810e950994952b0c7e288d593587fe8"
 
-line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler(CHANNEL_SECRET)
+def validate_signature(body, signature):
+    hash = hmac.new(
+        CHANNEL_SECRET.encode('utf-8'),
+        body.encode('utf-8'),
+        hashlib.sha256
+    ).digest()
+    expected_signature = base64.b64encode(hash).decode()
+    return hmac.compare_digest(expected_signature, signature)
 
+def send_reply(reply_token, text):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}"
+    }
+    payload = {
+        "replyToken": reply_token,
+        "messages": [
+            {
+                "type": "text",
+                "text": text
+            }
+        ]
+    }
+    response = requests.post(
+        "https://api.line.me/v2/bot/message/reply",
+        headers=headers,
+        data=json.dumps(payload)
+    )
+    if response.status_code != 200:
+        print(f"❌ LINE API Error: {response.status_code} {response.text}")
 
-@app.route("/callback", methods=['POST'])
+@app.route("/callback", methods=["POST"])
 def callback():
-    signature = request.headers['X-Line-Signature']
+    signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
 
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
+    if not validate_signature(body, signature):
+        print("❌ Invalid signature")
         abort(400)
-    return 'OK'
 
+    data = json.loads(body)
 
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    user_id = event.source.user_id
-    user_text = event.message.text
+    for event in data.get("events", []):
+        if event.get("type") == "message" and event["message"].get("type") == "text":
+            user_id = event["source"]["userId"]
+            user_text = event["message"]["text"]
+            reply_token = event["replyToken"]
 
-    # ✅ 把訊息寫進記憶檔案
-    append_to_memory(user_id, f"User: {user_text}")
+            
 
-    # ✅ 檢查是否新用戶或 G()P() 尚未填寫
-    memory_content = read_memory(user_id)
-    first_line = memory_content.splitlines()[0] if memory_content else ""
-    needs_gp = is_new_user(user_id) or "G()" in first_line
+            if user_text.startswith("更正"):
+                correction = user_text.replace("更正", "", 1).strip()
+                memory_file = get_memory_file_path(user_id)
 
-    if needs_gp:
-        create_memory_file(user_id)  # 若是新用戶，建立記憶檔
+                if re.match(r"^G\(\d*\)P\(\d*\)W\(\d*\)IsDad\((True|False)?\)Name\((.*?)\)$", correction):
+                    # ✅ 全欄位更正
+                    lines = read_memory(user_id).splitlines()
+                    lines[0] = correction
+                    with open(memory_file, "w", encoding="utf-8") as f:
+                        f.write("\n".join(lines) + "\n")
+                    send_reply(reply_token, f"✅ 已更正整行資料為：\n{correction}")
+                    return "OK"
 
-        # 嘗試從使用者輸入抓取 G(x)P(y)
-        gp_value = extract_gp_from_text(user_text)
+                # ✅ 單欄位更正
+                elif re.match(r"^G\(\d+\)P\(\d+\)$", correction):
+                    update_memory_gp(user_id, correction)
+                    send_reply(reply_token, f"✅ 已更新 G/P 為：{correction}")
+                    return "OK"
 
-        if gp_value:
-            # ✅ 加入 G/P 上限檢查
-            gp_match = re.search(r"G\((\d+)\)P\((\d+)\)", gp_value)
-            if gp_match:
-                g = int(gp_match.group(1))
-                p = int(gp_match.group(2))
-                if g > 15 or p > 15:
-                    try:
-                        line_bot_api.reply_message(
-                            event.reply_token,
-                            TextSendMessage(text="⚠️ 懷孕次數或生產次數超過上限，請重新確認。")
-                        )
-                    except Exception as e:
-                        print(f"Reply error: {e}")
-                    return  # 🛑 超過上限直接結束
+                elif re.match(r"^W\(\d+\)$", correction):
+                    week_value = int(re.search(r"W\((\d+)\)", correction).group(1))
+                    update_memory_weeks(user_id, week_value)
+                    send_reply(reply_token, f"✅ 已更新週數 W 為：{week_value}")
+                    return "OK"
 
-            # ✅ 更新 G/P
-            update_memory_gp(user_id, gp_value)
-            try:
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text=f"✅ 已儲存您的孕產史：{gp_value}\n您可以開始提問囉～")
+                elif re.match(r"^IsDad\((True|False)\)$", correction):
+                    isdad_value = correction == "IsDad(True)"
+                    update_memory_isdad(user_id, isdad_value)
+                    send_reply(reply_token, f"✅ 已更新 IsDad 為：{isdad_value}")
+                    return "OK"
+
+                elif re.match(r"^Name\((.*?)\)$", correction):
+                    name_value = re.search(r"Name\((.*?)\)", correction).group(1)
+                    update_memory_name(user_id, name_value)
+                    send_reply(reply_token, f"✅ 已更新名字 Name 為：{name_value}")
+                    return "OK"
+
+                else:
+                    send_reply(reply_token, "❌ 格式錯誤。\n請使用以下格式：\n"
+                                            "G(數字)P(數字)\n"
+                                            "W(數字)\n"
+                                            "IsDad(True|False)\n"
+                                            "Name(名字)\n"
+                                            "或整行：G()P()W()IsDad()Name()")
+                    return "OK"
+
+            # ✅ 把訊息寫進記憶檔案
+            append_to_memory(user_id, f"User: {user_text}")
+
+            # ✅ 讀取記憶檔案第一行
+            memory_content = read_memory(user_id)
+            first_line = memory_content.splitlines()[0] if memory_content else ""
+
+            field_patterns = {
+                "G/P": r"G\(\d+\)\s*P\(\d+\)",
+                "W": r"W\(\d+\)",
+                "IsDad": r"IsDad\((True|False|1|0)\)",
+                "Name": r"Name\((.*?)\)"
+            }
+            field_descriptions = {
+                "G/P": "孕產史（例如：我懷過1胎，生過0胎）",
+                "W": "目前週數（例如：目前5週）",
+                "IsDad": "您是否為父親（請回答：我是父親/不是父親）",
+                "Name": "您的名字（例如：小美）"
+            }
+
+            # ✅ 判斷缺少哪些欄位
+            missing_fields = [field for field, pattern in field_patterns.items() if not re.search(pattern, first_line)]
+
+            if missing_fields:
+                examples = """
+                【示例1】
+                輸入：「懷孕3次，生產一次，目前10週」
+                輸出：G(3)P(1)W(10)IsDad()Name()
+
+                【示例2】
+                輸入：「我是爸爸」
+                輸出：G()P()W()IsDad(True)Name()
+
+                【示例3】
+                輸入：「我叫小美」
+                輸出：G()P()W()IsDad()Name(小美)
+
+                【示例4】
+                輸入：「目前5週」
+                輸出：G()P()W(5)IsDad()Name()
+                
+                【示例5】
+                輸入：「懷過五胎，生過5胎」
+                輸出：G(5)P(5)W()IsDad()Name()
+
+                【示例6】
+                輸入：「已懷孕2次、落地一胎」
+                輸出：G(2)P(1)W()IsDad()Name()
+                
+                【示例˙】
+                輸入：「懷過八胎」
+                輸出：G(8)P()W()IsDad()Name()
+
+                """
+
+                system_prompt = (
+                    f"已知欄位：{first_line.strip()}。\n"
+                    f"請從以下文字補充缺失欄位：{', '.join(missing_fields)}。\n"
+                    "⚠️ 已知欄位不要修改。\n"
+                    "⚠️ 僅回傳缺失欄位的格式，例如：G(5)P(3)、W(10)、IsDad(True)、Name(Alice)。\n"
+                    "⚠️ 如果文字中有明確資料，即便語意不同（例如：『懷過5胎』、『生產過3次』），也要提取對應數值。\n"
+                    "⚠️ 如果缺少明確回答，請保持欄位空白，例如：G()P()W()IsDad()Name()\n"
+                    "❌ 不要根據名字或上下文推測欄位值。\n"
+                    "不要回覆任何其他內容。\n\n"
+                    f"{examples}"
                 )
-            except Exception as e:
-                print(f"Reply error: {e}")
-        else:
+
+
+
+                print(f"[DEBUG] system_prompt: {system_prompt}")
+
+                # ✅ 呼叫 LLM 提取缺失欄位
+                extracted_value = LLM_extract_from_text(user_text, system_prompt)
+                print(f"[DEBUG] LLM 回傳: {extracted_value}")
+
+                # ✅ 更新記憶檔案
+                if extracted_value:
+                    if re.search(r"G\(\d+\)\s*P\(\d+\)", extracted_value):
+                        update_memory_gp(user_id, re.search(r"G\(\d+\)\s*P\(\d+\)", extracted_value).group(0))
+                    if re.search(r"W\(\d+\)", extracted_value):
+                        update_memory_weeks(user_id, int(re.search(r"W\((\d+)\)", extracted_value).group(1)))
+                    if re.search(r"IsDad\((True|False|1|0)\)", extracted_value):
+                        isdad_raw = re.search(r"IsDad\((True|False|1|0)\)", extracted_value).group(1)
+                        isdad_value = isdad_raw in ["True", "1"]
+                        update_memory_isdad(user_id, isdad_value)
+                    if re.search(r"Name\((.*?)\)", extracted_value):
+                        name_value = re.search(r"Name\((.*?)\)", extracted_value).group(1).strip()
+                        if name_value.lower() not in ["unknown", "none", ""]:
+                            update_memory_name(user_id, name_value)
+
+                # ✅ 再次檢查是否還缺欄位
+                memory_content = read_memory(user_id)
+                first_line = memory_content.splitlines()[0] if memory_content else ""
+                still_missing = [field for field, pattern in field_patterns.items() if not re.search(pattern, first_line)]
+
+                if still_missing:
+                    # ⭕ 提示用戶補資料
+                    prompt = "✅ 已儲存部分資料。\n請提供以下資訊：\n" + \
+                        "\n".join([f"🔸{field_descriptions[f]}" for f in still_missing])
+                    send_reply(reply_token, prompt)
+                    return "OK"
+                else:
+                    # ✅ 全部資料補齊
+                   # 解析 G/P/W/IsDad/Name
+                    gp_match = re.search(r"G\((\d+)\)P\((\d+)\)", first_line)
+                    w_match = re.search(r"W\((\d+)\)", first_line)
+                    isdad_match = re.search(r"IsDad\((True|False)\)", first_line)
+                    name_match = re.search(r"Name\((.*?)\)", first_line)
+
+                    g_value = int(gp_match.group(1)) if gp_match else 0
+                    p_value = int(gp_match.group(2)) if gp_match else 0
+                    week_value = int(w_match.group(1)) if w_match else None
+                    isdad_value = (
+                        "準爸爸" if isdad_match and isdad_match.group(1) == "True"
+                        else "準媽媽" if isdad_match and isdad_match.group(1) == "False"
+                        else "未知身份"
+                    )
+                    name_value = name_match.group(1) if name_match else "未提供"
+
+                    # 組合自然語言描述
+                    summary_text = f"✅ 已儲存您的資料：您是{isdad_value}，"
+                    summary_text += f"產婦曾懷胎{g_value}次，曾產{p_value}胎，"
+                    if week_value:
+                        summary_text += f"目前懷胎{week_value}週，"
+                    summary_text += f"登記名字是{name_value}。"
+
+
+                    # 發送訊息
+                    send_reply(reply_token, summary_text + "\n您可以開始提問囉～")
+                    return "OK"
+
+            # ✅ 所有資料齊全，開始正常對話
+            history_text = "\n".join(memory_content.splitlines()[1:])
+            gp_match = re.search(r"G\((\d+)\)P\((\d+)\)", first_line)
+            week_match = re.search(r"W\((\d+)\)", first_line)
+            isdad_match = re.search(r"IsDad\((True|False)\)", first_line)
+            g_value = int(gp_match.group(1)) if gp_match else 0
+            p_value = int(gp_match.group(2)) if gp_match else 0
+            week_value = int(week_match.group(1)) if week_match else 0
+            isdad_value = True if isdad_match and isdad_match.group(1) == "True" else False
             try:
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    #TextSendMessage(text="您好，很高興為您服務。請先提供您的孕產史，以及目前週數（例如：我懷過1胎，生過0胎、目前五周）。")
-                    TextSendMessage(text="您好，很高興為您服務，請先提供您的孕產史（例如：我懷過1胎，生過0胎）。")
+                contexts = query_with_context(user_text, 3)
+                finaljson, source_summary = build_augmented_prompt(
+                contexts,
+                user_question=user_text,
+                modelname="gemma-3-4b-it",
+                g_value=g_value,
+                p_value=p_value,
+                history_text=history_text,
+                week_value=week_value,
+                isdad=isdad_value
                 )
+
+                response = requests.post(
+                    "http://127.0.0.1:1234/v1/chat/completions",
+                    headers={"Content-Type": "application/json"},
+                    json=finaljson
+                )
+                lm_response = response.json()
+                generated_text = lm_response["choices"][0]["message"]["content"].strip()
+                if source_summary:
+                    generated_text += f"\n資料來源: {source_summary}"
+                    
             except Exception as e:
-                print(f"Reply error: {e}")
-        return  # 🛑 已提示或儲存後結束，不跑後續問答
+                print(f"LM Studio request error: {e}")
+                generated_text = "❌ 抱歉，目前無法取得回應，請稍後再試。"
 
-    # 🟢 已填孕產史 → 正常進入問答模式
-    try:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="✅ 已收到您的訊息，模型正在運算中，可能有數十秒的延遲，請稍候...")
-        )
-    except Exception as e:
-        print(f"Reply error: {e}")
+            append_to_memory(user_id, f"Bot: {generated_text}")
+            send_reply(reply_token, generated_text)
 
-    # 🧠 讀取記憶
-    memory_lines = read_memory(user_id).splitlines()
-    gp_line = memory_lines[0] if memory_lines else ""
-    history_text = "\n".join(memory_lines[1:])
-
-    # 📦 解析 G()P()
-    gp_match = re.search(r"G\((\d+)\)P\((\d+)\)", gp_line)
-    g_value = int(gp_match.group(1)) if gp_match else 0
-    p_value = int(gp_match.group(2)) if gp_match else 0
-
-    # 🔗 呼叫模型
-    model_name = "gemma-3-4b-it"  # fallback
-    try:
-        model_response = requests.get(f"{LMStudioIp}/v1/models")
-        model_response.raise_for_status()
-        models_data = model_response.json()
-        if "data" in models_data and len(models_data["data"]) > 0:
-            model_name = models_data["data"][0]["id"]
-    except Exception as e:
-        print(f"取得模型失敗: {e}")
-
-    system_message = (
-        "⚠️ 你是一位產科與母嬰護理顧問，請根據上下文專業、回答問題，不要重複提醒孕產史。"
-        "如果資料不足，請說明「資料不足」，不要編造內容。"
-    )
-
-    try:
-        contexts = query_with_context(user_text, 3)
-        finaljson = build_augmented_prompt(
-            contexts,
-            user_question=user_text,
-            modelname=model_name,
-            g_value=g_value,
-            p_value=p_value,
-            history_text=history_text
-        )
-
-        response = requests.post(
-            f"{LMStudioIp}/v1/chat/completions",
-            headers={"Content-Type": "application/json"},
-            json=finaljson
-        )
-        lm_response = response.json()
-        choices = lm_response.get("choices")
-        if choices and isinstance(choices, list) and len(choices) > 0:
-            message = choices[0].get("message")
-            if message and isinstance(message, dict):
-                generated_text = message.get("content", "（模型回應沒有內容）")
-            else:
-                generated_text = "（模型回應格式錯誤）"
-        else:
-            generated_text = "（模型沒有回傳 choices）"
-
-    except Exception as e:
-        print(f"LM Studio request error: {e}")
-        generated_text = "❌ 抱歉，目前無法取得回應，請稍後再試。"
-
-    # ✅ fallback 檢查（移到這裡）
-    if "孕產史提取" in generated_text and "無法提取孕產史" in generated_text:
-        generated_text = (
-            "資料不足，請洽詢專業醫護人員。\n"
-            "台大醫院電話:(02)2312-3456\n衛教專線:轉266546\n診後說明處:轉266549\n9F產房護理站:轉270908或270909\n"
-            "或是衛服部孕產婦關懷諮詢服務專線: 0800-870-870。"
-        )
-
-    # 📝 記錄模型回應
-    append_to_memory(user_id, f"Bot: {generated_text}")
-
-    try:
-        line_bot_api.push_message(
-            user_id,
-            TextSendMessage(text=generated_text)
-        )
-    except Exception as e:
-        print(f"Push message error: {e}")
-
-
+    return "OK"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

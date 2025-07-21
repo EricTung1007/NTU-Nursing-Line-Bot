@@ -25,7 +25,7 @@ def create_memory_file(user_id):
     file_path = get_memory_file_path(user_id)
     if not os.path.exists(file_path):
         with open(file_path, "w", encoding="utf-8") as f:
-            f.write("G()P()na()aa()[孕產史]\n")
+            f.write("G()P()W()IsDad()Name()\n")
     return file_path
 
 def append_to_memory(user_id, content):
@@ -63,48 +63,83 @@ def update_memory_gp(user_id, gp_value):
     with open(file_path, "w", encoding="utf-8") as f:
         f.writelines(lines)
 
-
-def extract_gp_from_text(text):
+def update_memory_weeks(user_id, week_value):
     """
-    嘗試從純文字提取 G/P，失敗時用 LM Studio 輔助
+    更新記憶檔案中的 W() 週數
     """
-    # 🟢 1. 正則檢查
-    match = re.search(r"G\((\d+)\)\s*P\((\d+)\)", text)
-    if match:
-        g, p = int(match.group(1)), int(match.group(2))
-        if g < p:
-            print(f"❌ 使用者輸入 G({g}) < P({p})，請提醒確認")
-            return "INVALID:G<P"  # 讓外層提示用戶
-        return f"G({g})P({p})"
+    file_path = get_memory_file_path(user_id)
+    if not os.path.exists(file_path):
+        create_memory_file(user_id)
 
-    match2 = re.search(r"懷[孕過]?(\d+)胎[^生]*生[產過]?(\d+)胎?", text)
-    if match2:
-        g, p = int(match2.group(1)), int(match2.group(2))
-        if g < p:
-            print(f"❌ 使用者輸入 G({g}) < P({p})，請提醒確認")
-            return "INVALID:G<P"
-        return f"G({g})P({p})"
+    with open(file_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
 
-    # 🟡 2. 呼叫 LM Studio 模型
+    if lines:
+        if "W(" not in lines[0]:
+            # 修正：在 P(...) 後插入 W(...)
+            lines[0] = re.sub(r"(P\(\d*\))", r"\1W({})".format(week_value), lines[0])
+        else:
+            lines[0] = re.sub(r"W\(\d*\)", f"W({week_value})", lines[0])
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+def update_memory_isdad(user_id, isdad_value):
+    """
+    更新記憶檔案中的 IsDad() 狀態
+    """
+    file_path = get_memory_file_path(user_id)
+    if not os.path.exists(file_path):
+        create_memory_file(user_id)
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    if lines:
+        # 修正：匹配 IsDad() 或 IsDad(True|False)
+        if re.search(r"IsDad\((True|False)?\)", lines[0]):
+            lines[0] = re.sub(r"IsDad\((True|False)?\)", f"IsDad({isdad_value})", lines[0])
+        else:
+            lines[0] = lines[0].strip() + f"IsDad({isdad_value})\n"
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+def update_memory_name(user_id, name_value):
+    """
+    更新記憶檔案中的 Name() 名字
+    """
+    file_path = get_memory_file_path(user_id)
+    if not os.path.exists(file_path):
+        create_memory_file(user_id)
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    if lines:
+        # 不要檢查是否存在，直接替換
+        lines[0] = re.sub(r"Name\((.*?)\)", f"Name({name_value})", lines[0])
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+def LLM_extract_from_text(text, system_prompt):
+    """
+    使用 LLM 提取單一欄位，並檢查格式合法性
+    """
     try:
         lm_payload = {
-    "model": EMBED_MODEL,
-    "messages": [
-        {
-            "role": "system",
-            "content": (
-                "請從以下文字正確提取孕產史（懷孕次數 G 和生產次數 P）。"
-                "⚠️ G 代表懷孕次數，P 代表生產次數。\n"
-                "⚠️ **G 必須 >= P，否則是錯誤的**。\n"
-                "只回傳格式 G(x)P(y)，不要回覆任何解釋或其他內容。"
-            )
-        },
-        {"role": "user", "content": text}
-    ],
-    "temperature": 0.1,
-    "max_tokens": 20,
-    "stream": False
-}
+            "model": EMBED_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text}
+            ],
+            "temperature": 0.1,
+            "max_tokens": 50,  # 稍微提高以避免截斷
+            "stream": False
+        }
 
         response = requests.post(
             f"{LMStudioIp}/v1/chat/completions",
@@ -115,18 +150,58 @@ def extract_gp_from_text(text):
         result = response.json()
         content = result["choices"][0]["message"]["content"].strip()
 
-        # 檢查 LM 回傳是否有效
-        gp_match = re.search(r"G\((\d+)\)\s*P\((\d+)\)", content)
-        if gp_match:
-            g, p = int(gp_match.group(1)), int(gp_match.group(2))
-            if g < p:
-                print(f"⚠️ LM 回傳 G({g}) < P({p})，視為模型誤判，不採用")
-                return None  # 丟掉這次 LM 回傳
-            return f"G({g})P({p})"
+        # ✅ 檢查 LLM 回傳格式
+        if not re.search(r"(G\(\d+\)\s*P\(\d+\))?|W\(\d+\)|IsDad\((True|False|1|0)\)|Name\(.+\)", content):
+            print(f"⚠️ 格式錯誤: {content}")
+            return None
+
+        return content
 
     except Exception as e:
-        print(f"⚠️ LM Studio 輔助提取失敗: {e}")
+        print(f"⚠️ LLM Studio 提取失敗: {e}")
 
-    # 🟥 完全失敗
     return None
+
+
+
+
+
+def extract_gp_and_weeks_from_text(text):
+    """
+    嘗試同時從文字提取 G/P、W(週數)、IsDad 和 Name
+    """
+    wholevalue = LLM_extract_from_text(text)
+    if not wholevalue:
+        return None, None, None, None
+
+    # 用正則從 wholevalue 拆出 G/P, W, IsDad, Name
+    gp_match = re.search(r"G\((\d+)\)\s*P\((\d+)\)", wholevalue)
+    w_match = re.search(r"W\((\d+)\)", wholevalue)
+    isdad_match = re.search(r"IsDad\((True|False|1|0)\)", wholevalue)  # ✅ 修正
+    name_match = re.search(r"Name\((.*?)\)", wholevalue)
+
+    gp_value = None
+    week_value = None
+    isdad_value = None
+    name_value = None
+
+    if gp_match:
+        g, p = int(gp_match.group(1)), int(gp_match.group(2))
+        gp_value = f"G({g})P({p})"
+
+    if w_match:
+        week_value = int(w_match.group(1))
+
+    if isdad_match:
+        isdad_raw = isdad_match.group(1)
+        # ✅ 修正: 將 1/0 轉為 True/False
+        isdad_value = True if isdad_raw in ("True", "1") else False
+
+    if name_match:
+        name_value = name_match.group(1).strip()
+        if name_value.lower() in ("unknown", "none", ""):
+            name_value = None  # 如果是 unknown/none/空字串 當作沒填
+
+
+    return gp_value, week_value, isdad_value, name_value
 
