@@ -1,3 +1,4 @@
+#rag module
 import json
 import requests
 import faiss
@@ -22,7 +23,7 @@ def get_embedding(text: str) -> List[float]:
 
 
 # 查詢相關段落
-def query_with_context(user_message: str, top_k: int = 3) -> List[Dict]:
+def query_with_context(user_message: str, top_k: int = 10) -> List[Dict]:
     query_vector = get_embedding(user_message)
     index = faiss.read_index(INDEX_PATH)
 
@@ -61,9 +62,9 @@ def build_augmented_prompt(
 )
 
     trimester = (
-    "懷孕初期" if week_value < 12
-    else "懷孕中期" if 13 < week_value < 28
-    else "懷孕後期" if 29 < week_value < 40
+    "懷孕初期" if int(week_value) < 12
+    else "懷孕中期" if 13 < int(week_value) < 28
+    else "懷孕後期" 
     )
     
     
@@ -95,8 +96,8 @@ def build_augmented_prompt(
     system_message = (
         "⚠️ 你是一位產科與母嬰護理顧問，請根據參考資料回答問題：\n"
         "✅ **回答僅保留與問題最相關的重點，不要列出全部 context。**\n"
-        "✅ 回答應簡短、專業，避免冗長分析與贅述。\n"
-        "✅ 正文中禁止插入資料來源，所有資料來源統一集中列在回答末尾。\n"
+        "✅ 回答長度應在150中文字左右，至多200中文字，需簡短、專業、去除非必要的贅字，且避免冗長分析與贅述。\n"
+        #"✅ 正文中禁止插入資料來源，所有資料來源統一集中列在回答末尾。\n"
         "✅ 結尾不要多餘提問。\n"
         "⚠️ 如果資料不足，請說明：「資料中無相關內容，建議洽詢專業人員」。\n"
         "⚠️ 禁止回答與產科無關的問題（如程式撰寫、心理諮詢、占卜等）。\n\n"
@@ -114,20 +115,33 @@ def build_augmented_prompt(
             {"role": "user", "content": user_question}
         ],
         "temperature": 0.6,
-        "max_tokens": 10000,
+        "max_tokens": 600,
         "stream": False
     }, source_summary
 
 
 # 📝 摘要 context 並集中來源
 def summarize_context_with_pages(contexts: List[Dict], user_question: str) -> (str, str):
+    # 合併所有文字內容
     combined_text = "\n\n".join([
         f"{c['text']}" for c in contexts
     ])
-    sources = []
+
+    # 將來源按書名分組
+    from collections import defaultdict
+    book_pages = defaultdict(set)
     for c in contexts:
-        page_info = f"{c['source']} 第{c['page']}頁" if c['page'] != -1 else c['source']
-        if page_info not in sources:
-            sources.append(page_info)
-    source_summary = "; ".join(sources)
+        if c['page'] != -1:
+            book_pages[c['source']].add(c['page'])
+        else:
+            book_pages[c['source']].add("無頁碼")
+
+    # 合併頁碼並組成來源字串
+    grouped_sources = []
+    for book, pages in book_pages.items():
+        page_list = sorted(pages, key=lambda x: (isinstance(x, int), x))
+        page_str = ",".join(str(p) for p in page_list)
+        grouped_sources.append(f"{book} 第{page_str}頁")
+    
+    source_summary = "; ".join(grouped_sources)
     return combined_text, source_summary

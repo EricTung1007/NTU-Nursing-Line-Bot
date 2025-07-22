@@ -1,3 +1,4 @@
+#LB.py
 from flask import Flask, request, abort
 import requests
 import hmac
@@ -161,9 +162,21 @@ def callback():
                 輸入：「已懷孕2次、落地一胎」
                 輸出：G(2)P(1)W()IsDad()Name()
                 
-                【示例˙】
+                【示例7】
                 輸入：「懷過八胎」
                 輸出：G(8)P()W()IsDad()Name()
+                
+                【示例8】
+                輸入：「懷過一胎，還沒生」
+                輸出：G(1)P(0)W()IsDad()Name()
+                
+                【示例9】
+                輸入：「懷過一胎，生過0胎」
+                輸出：G(1)P(0)W()IsDad()Name()
+                
+                【示例10】
+                輸入：「我是吳子翔，是母親，已經懷孕5次，生產0次，目前懷孕5週。」
+                輸出：G(5)P(0)W(5)IsDad(False)Name(吳子翔)
 
                 """
 
@@ -253,7 +266,7 @@ def callback():
             week_value = int(week_match.group(1)) if week_match else 0
             isdad_value = True if isdad_match and isdad_match.group(1) == "True" else False
             try:
-                contexts = query_with_context(user_text, 3)
+                contexts = query_with_context(user_text, 5)
                 finaljson, source_summary = build_augmented_prompt(
                 contexts,
                 user_question=user_text,
