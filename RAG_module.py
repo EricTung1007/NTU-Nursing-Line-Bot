@@ -31,8 +31,8 @@ def query_with_context(user_message: str, top_k: int = 10) -> List[Dict]:
         metadatas = json.load(f)
 
     D, I = index.search(np.array([query_vector]).astype("float32"), top_k)
-    print("FAISS distance:", D[0])
-    print("FAISS index:", I[0])
+    #print("FAISS distance:", D[0])
+    #print("FAISS index:", I[0])
 
     results = []
     for dist, idx in zip(D[0], I[0]):
@@ -40,11 +40,11 @@ def query_with_context(user_message: str, top_k: int = 10) -> List[Dict]:
             results.append(metadatas[idx])
 
     if not results:
-        print("[⚠️ Fallback] No context found.")
+       # print("[⚠️ Fallback] No context found.")
         return []
  
 
-    print(f"[DEBUG] Retrieved {len(results)} context(s)")
+    #print(f"[DEBUG] Retrieved {len(results)} context(s)")
     return results
 
 
@@ -77,7 +77,7 @@ def build_augmented_prompt(
     
     # 🔗 拼接 context 文字與來源
     context_text, source_summary = summarize_context_with_pages(contexts, user_question)
-    print(f"[DEBUG] Final context length: {len(context_text)} 字")
+    #print(f"[DEBUG] Final context length: {len(context_text)} 字")
 
     # 🟡 fallback：沒有資料
     if contexts is None or len(contexts) == 0 or not context_text.strip():
@@ -87,7 +87,7 @@ def build_augmented_prompt(
             "2. 如果使用者問了非孕產問題，請回：「此問題不屬於產科範圍，因此無法回答。」\n"
             "3. 如果資料不足，請回：「資料不足，建議洽詢專業醫護人員。」"
         )
-        print("[⚠️ Fallback] No context found, using fallback message.")
+        #print("[⚠️ Fallback] No context found, using fallback message.")
         return {
         "model": modelname,
         "messages": [
@@ -101,26 +101,37 @@ def build_augmented_prompt(
 
 
     # 🟢 正常提示詞
-    system_message = (
-        "⚠️ 你是一位產科與母嬰護理顧問，請根據參考資料回答問題：\n"
-        "✅ **回答僅保留與問題最相關的重點，不要列出全部 context。**\n"
-        "✅ 回答長度應在150中文字左右，至多200中文字，需簡短、專業、去除非必要的贅字，且避免冗長分析與贅述。\n"
-        #"✅ 正文中禁止插入資料來源，所有資料來源統一集中列在回答末尾。\n"
-        "✅ 結尾不要多餘提問。\n"
-        "⚠️ 如果資料不足，請說明：「資料中無相關內容，建議洽詢專業人員」。並提供以下所有電話聯絡資訊:\n"
-        "• 台大醫院總機：(02) 2312-3456\n"
-        "• 衛教專線：轉 266546\n"
-        "• 診後說明處：轉 266549\n"
-        "• 9F 產房護理站：轉 270908 或 270909\n"
-        "• 衛福部孕產婦關懷諮詢專線：0800-870-870\n"
-        "⚠️ 禁止回答與產科無關的問題（如程式撰寫、心理諮詢、占卜等）。\n"
-        "如果使用者沒有問問題只有打招呼（如：您好、哈囉、Hi），請回：「您好 👋 有什麼我可以協助的嗎？」，不要提供其他建議，也不須嘗試回答問題\n"
-        f"📖 參考資料：\n{context_text}\n\n"
-        #f"🗂 過往對話紀錄:\n{history_text}\n\n"
-        f"👩‍🍼 使用者資料: 懷過 {g_value} 胎，生過 {p_value} 胎，{isdad_status}。\n"
-        f"📆 目前週數: {week_value if week_value else '未提供'} 週，處於{trimester}。\n"
-    )
-    print("正常問答輸入 system_message: ", system_message)
+    system_message = f"""
+        你是一位專業【產科與母嬰照護顧問】，僅依據下方提供的參考資料，協助解答懷孕相關問題。
+
+        🟩 回應規則：
+        • 回答限150字內（最多200字），語氣專業、簡潔、有條理。
+        • 僅針對提問主題提供重點，不複誦全部 context，不冗長分析。
+        • 回答時不得主動提出結尾提問。
+        • 回覆時應避免不必要的寒暄、鼓勵詞、贅述。
+        • 嚴禁處理非產科問題（如心理諮詢、程式撰寫、占卜等）。
+
+        🟦 根據使用者身份調整語氣與內容：
+        • 若為「準媽媽」，請以直接面對她的語氣建議，例如「您可以⋯」「建議您⋯」。
+        • 若為「準爸爸」，請強調支持與陪伴的角色，例如「請您協助太太⋯」「陪她一起⋯」。
+        • 若無法判定身分，請使用中性第三人稱表述。
+
+        🟥 若找不到相關資料，請回應：
+        「資料中無相關內容，建議洽詢專業人員」，並附上以下資訊：
+        • 台大醫院：(02) 2312-3456，轉 266546（衛教）／266549（診後）／270908・270909（產房）
+        • 衛福部孕產婦諮詢專線：0800-870-870
+
+        📖 參考資料：
+        {context_text}
+
+        🗂 使用者資料：
+        • 姓名：{name_value}
+        • 懷孕次數 G：{g_value}
+        • 生產次數 P：{p_value}
+        • 使用者身份：{isdad_status}
+        • 目前孕週：{week_value or '未提供'} 週，{trimester}
+        """
+    #print("[DEBUG]正常問答輸入 system_message: ", system_message)
 
     return {
         "model": modelname,

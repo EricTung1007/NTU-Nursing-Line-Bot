@@ -34,7 +34,7 @@ def send_reply(reply_token, text, user_id=None):
         append_to_memory(user_id, f"Bot: {text}")  # ⬅️ 不論 CLI 還是 LINE 都寫入
     
     if reply_token == "CLI_TOKEN":
-        print("Bot：" + text)
+        print("\nBot：" + text)
         return
     
     headers = {
@@ -389,7 +389,7 @@ def run_cli():
 if __name__ == "__main__":
     mode = input("請選擇模式：1=CLI測試，2=Flask webhook，3=同時執行：")
 
-    if mode == "1":
+    if mode == "1" or "CLI" or "cli":
         run_cli()
     elif mode == "2":
         run_flask()
