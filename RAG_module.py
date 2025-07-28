@@ -38,8 +38,15 @@ def query_with_context(user_message: str, top_k: int = 10) -> List[Dict]:
     for dist, idx in zip(D[0], I[0]):
         if dist < 0.8:  # ⚠️ 放寬距離門檻
             results.append(metadatas[idx])
+
+    if not results:
+        print("[⚠️ Fallback] No context found.")
+        return []
+ 
+
     print(f"[DEBUG] Retrieved {len(results)} context(s)")
     return results
+
 
 
 # 🟢 組合提示詞（Prompt）
@@ -82,15 +89,16 @@ def build_augmented_prompt(
         )
         print("[⚠️ Fallback] No context found, using fallback message.")
         return {
-            "model": modelname,
-            "messages": [
-                {"role": "system", "content": fallback_system_message},
-                {"role": "user", "content": f"{user_question}（⚠ 查無相關資料）"}
-            ],
-            "temperature": 0.4,
-            "max_tokens": 10000,
-            "stream": False
-        }
+        "model": modelname,
+        "messages": [
+            {"role": "system", "content": fallback_system_message},
+            {"role": "user", "content": f"{user_question}（⚠ 查無相關資料）"}
+        ],
+        "temperature": 0.4,
+        "max_tokens": 10000,
+        "stream": False
+        }, None  # ⬅ 注意這個 None 是 source_summary 的佔位
+
 
     # 🟢 正常提示詞
     system_message = (
@@ -99,8 +107,14 @@ def build_augmented_prompt(
         "✅ 回答長度應在150中文字左右，至多200中文字，需簡短、專業、去除非必要的贅字，且避免冗長分析與贅述。\n"
         #"✅ 正文中禁止插入資料來源，所有資料來源統一集中列在回答末尾。\n"
         "✅ 結尾不要多餘提問。\n"
-        "⚠️ 如果資料不足，請說明：「資料中無相關內容，建議洽詢專業人員」。\n"
-        "⚠️ 禁止回答與產科無關的問題（如程式撰寫、心理諮詢、占卜等）。\n\n"
+        "⚠️ 如果資料不足，請說明：「資料中無相關內容，建議洽詢專業人員」。並提供以下所有電話聯絡資訊:\n"
+        "• 台大醫院總機：(02) 2312-3456\n"
+        "• 衛教專線：轉 266546\n"
+        "• 診後說明處：轉 266549\n"
+        "• 9F 產房護理站：轉 270908 或 270909\n"
+        "• 衛福部孕產婦關懷諮詢專線：0800-870-870\n"
+        "⚠️ 禁止回答與產科無關的問題（如程式撰寫、心理諮詢、占卜等）。\n"
+        "如果使用者沒有問問題只有打招呼（如：您好、哈囉、Hi），請回：「您好 👋 有什麼我可以協助的嗎？」，不要提供其他建議，也不須嘗試回答問題\n"
         f"📖 參考資料：\n{context_text}\n\n"
         #f"🗂 過往對話紀錄:\n{history_text}\n\n"
         f"👩‍🍼 使用者資料: 懷過 {g_value} 胎，生過 {p_value} 胎，{isdad_status}。\n"

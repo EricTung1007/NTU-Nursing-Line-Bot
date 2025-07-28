@@ -283,6 +283,7 @@ def callback():
                     headers={"Content-Type": "application/json"},
                     json=finaljson
                 )
+                print(f"[DEBUG]FinalJson:{finaljson}")
                 lm_response = response.json()
                 generated_text = lm_response["choices"][0]["message"]["content"].strip()
                 if source_summary:
@@ -290,6 +291,7 @@ def callback():
                     
             except Exception as e:
                 print(f"LM Studio request error: {e}")
+                
                 generated_text = "❌ 抱歉，目前無法取得回應，請稍後再試。"
 
             append_to_memory(user_id, f"Bot: {generated_text}")
