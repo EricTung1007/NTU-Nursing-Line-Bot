@@ -7,8 +7,6 @@ import base64
 import json
 import re
 import threading
-import os
-import time
 
 from RAG_module import query_with_context, build_augmented_prompt
 from memory_module import (
@@ -29,14 +27,7 @@ def validate_signature(body, signature):
     expected_signature = base64.b64encode(hash).decode()
     return hmac.compare_digest(expected_signature, signature)
 
-def send_reply(reply_token, text, user_id=None):
-    if user_id:
-        append_to_memory(user_id, f"Bot: {text}")  # ⬅️ 不論 CLI 還是 LINE 都寫入
-    
-    if reply_token == "CLI_TOKEN":
-        print("Bot：" + text)
-        return
-    
+def send_reply(reply_token, text):
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}"
@@ -58,11 +49,19 @@ def send_reply(reply_token, text, user_id=None):
     if response.status_code != 200:
         print(f"❌ LINE API Error: {response.status_code} {response.text}")
 
+@app.route("/callback", methods=["POST"])
+def callback():
+    signature = request.headers.get("X-Line-Signature", "")
+    body = request.get_data(as_text=True)
 
-def handle_event(event):
-            if not (event.get("type") == "message" and event["message"].get("type") == "text"):
-                return
-            
+    if not validate_signature(body, signature):
+        print("❌ Invalid signature")
+        abort(400)
+
+    data = json.loads(body)
+
+    for event in data.get("events", []):
+        if event.get("type") == "message" and event["message"].get("type") == "text":
             user_id = event["source"]["userId"]
             user_text = event["message"]["text"]
             reply_token = event["replyToken"]
@@ -79,31 +78,31 @@ def handle_event(event):
                     lines[0] = correction
                     with open(memory_file, "w", encoding="utf-8") as f:
                         f.write("\n".join(lines) + "\n")
-                    send_reply(reply_token, f"✅ 已更正整行資料為：\n{correction}", user_id)
+                    send_reply(reply_token, f"✅ 已更正整行資料為：\n{correction}")
                     return "OK"
 
                 # ✅ 單欄位更正
                 elif re.match(r"^G\(\d+\)P\(\d+\)$", correction):
                     update_memory_gp(user_id, correction)
-                    send_reply(reply_token, f"✅ 已更新 G/P 為：{correction}", user_id)
+                    send_reply(reply_token, f"✅ 已更新 G/P 為：{correction}")
                     return "OK"
 
                 elif re.match(r"^W\(\d+\)$", correction):
                     week_value = int(re.search(r"W\((\d+)\)", correction).group(1))
                     update_memory_weeks(user_id, week_value)
-                    send_reply(reply_token, f"✅ 已更新週數 W 為：{week_value}", user_id)
+                    send_reply(reply_token, f"✅ 已更新週數 W 為：{week_value}")
                     return "OK"
 
                 elif re.match(r"^IsDad\((True|False)\)$", correction):
                     isdad_value = correction == "IsDad(True)"
                     update_memory_isdad(user_id, isdad_value)
-                    send_reply(reply_token, f"✅ 已更新 IsDad 為：{isdad_value}", user_id)
+                    send_reply(reply_token, f"✅ 已更新 IsDad 為：{isdad_value}")
                     return "OK"
 
                 elif re.match(r"^Name\((.*?)\)$", correction):
                     name_value = re.search(r"Name\((.*?)\)", correction).group(1)
                     update_memory_name(user_id, name_value)
-                    send_reply(reply_token, f"✅ 已更新名字 Name 為：{name_value}", user_id)
+                    send_reply(reply_token, f"✅ 已更新名字 Name 為：{name_value}")
                     return "OK"
 
                 else:
@@ -112,7 +111,7 @@ def handle_event(event):
                                             "W(數字)\n"
                                             "IsDad(True|False)\n"
                                             "Name(名字)\n"
-                                            "或整行：G()P()W()IsDad()Name()", user_id)
+                                            "或整行：G()P()W()IsDad()Name()")
                     return "OK"
 
             # ✅ 把訊息寫進記憶檔案
@@ -135,36 +134,8 @@ def handle_event(event):
                 "Name": "您的名字（例如：小美）"
             }
 
-            missing_fields = []
-
-            for field, pattern in field_patterns.items():
-                match = re.search(pattern, first_line)
-
-                if field == "Name":
-                    if match:
-                        try:
-                            name_inner = match.group(1).strip()
-                            if name_inner == "":
-                                #print(f"[DEBUG] 檢查欄位：{field} → 空字串 Name() → 補問")
-                                missing_fields.append("Name")
-                            #else:
-                                #print(f"[DEBUG] 檢查欄位：{field} → {match.group(0)}")
-                        except IndexError:
-                            #print(f"[DEBUG] 檢查欄位：{field} → 無效格式 → 補問")
-                            missing_fields.append("Name")
-                    else:
-                        #print(f"[DEBUG] 檢查欄位：{field} → 無匹配")
-                        missing_fields.append("Name")
-
-                else:
-                    if not match:
-                        #print(f"[DEBUG] 檢查欄位：{field} → 無匹配")
-                        missing_fields.append(field)
-                    #else:
-                        #print(f"[DEBUG] 檢查欄位：{field} → {match.group(0)}")
-
-
-
+            # ✅ 判斷缺少哪些欄位
+            missing_fields = [field for field, pattern in field_patterns.items() if not re.search(pattern, first_line)]
 
             if missing_fields:
                 examples = """
@@ -224,11 +195,11 @@ def handle_event(event):
 
 
 
-                #print(f"[DEBUG] system_prompt: {system_prompt}")
+                print(f"[DEBUG] system_prompt: {system_prompt}")
 
                 # ✅ 呼叫 LLM 提取缺失欄位
                 extracted_value = LLM_extract_from_text(user_text, system_prompt)
-                #print(f"[DEBUG] LLM 回傳: {extracted_value}")
+                print(f"[DEBUG] LLM 回傳: {extracted_value}")
 
                 # ✅ 更新記憶檔案
                 if extracted_value:
@@ -252,16 +223,9 @@ def handle_event(event):
 
                 if still_missing:
                     # ⭕ 提示用戶補資料
-                    prompt = "\n您好，請提供以下資訊：\n"
-                    for f in missing_fields:
-                        if f in field_descriptions:
-                            prompt += f"🔸{field_descriptions[f]}\n"
-                        else:
-                            print(f"[WARNING] 無法為欄位 {f} 提示描述")
-                            prompt += f"🔸請補上欄位：{f}\n"
-
-
-                    send_reply(reply_token, prompt, user_id)
+                    prompt = "✅ 已儲存部分資料。\n請提供以下資訊：\n" + \
+                        "\n".join([f"🔸{field_descriptions[f]}" for f in still_missing])
+                    send_reply(reply_token, prompt)
                     return "OK"
                 else:
                     # ✅ 全部資料補齊
@@ -290,7 +254,7 @@ def handle_event(event):
 
 
                     # 發送訊息
-                    send_reply(reply_token, summary_text + "\n您可以開始提問囉～", user_id)
+                    send_reply(reply_token, summary_text + "\n您可以開始提問囉～")
                     return "OK"
 
             # ✅ 所有資料齊全，開始正常對話
@@ -320,7 +284,7 @@ def handle_event(event):
                     headers={"Content-Type": "application/json"},
                     json=finaljson
                 )
-                #print(f"[DEBUG]FinalJson:{finaljson}")
+                print(f"[DEBUG]FinalJson:{finaljson}")
                 lm_response = response.json()
                 generated_text = lm_response["choices"][0]["message"]["content"].strip()
                 if source_summary:
@@ -331,77 +295,54 @@ def handle_event(event):
                 
                 generated_text = "❌ 抱歉，目前無法取得回應，請稍後再試。"
 
+            append_to_memory(user_id, f"Bot: {generated_text}")
+            send_reply(reply_token, generated_text)
 
-            send_reply(reply_token, generated_text, user_id)
-            return "OK"
-        
-@app.route("/callback", methods=["POST"])
-def callback():
-    signature = request.headers.get("X-Line-Signature", "")
-    body = request.get_data(as_text=True)
-
-    if not validate_signature(body, signature):
-        print("❌ Invalid signature")
-        abort(400)
-
-    data = json.loads(body)
-
-    for event in data.get("events", []):
-        handle_event(event)
     return "OK"
 
 def run_flask():
-    app.run(host="0.0.0.0", port=5000, threaded=True)
+    app.run(host="0.0.0.0", port=5000)
 
 # ✅ CLI 任務：用終端機測試對話
 
 def run_cli():
-    path = get_memory_file_path("CLI")
-    if os.path.exists(path):
-        os.remove(path)
-        
     while True:
         user_input = input("你：")
         if user_input.lower() in ["exit", "quit"]:
+            print("👋 結束 CLI 測試模式")
             break
-        if user_input.lower() in ["restart"]:
-            path = get_memory_file_path("CLI")
-            if os.path.exists(path):
-                os.remove(path)
 
-        # 模擬 LINE 傳進來的 event 結構
-        event = {
-            "type": "message",
-            "message": {
-                "type": "text",
-                "text": user_input
-            },
-            "source": {
-                "userId": "CLI"
-            },
-            "replyToken": "CLI_TOKEN"  # 用不到實際 token
-        }
+        # 模擬 user_id，這樣可以用現有記憶模組
+        user_id = "cli_user"
+        append_to_memory(user_id, f"User: {user_input}")
+        memory_content = read_memory(user_id)
+        history_text = "\n".join(memory_content.splitlines()[1:])
 
-        handle_event(event)
+        # 假設 G/P/W/IsDad 都已提供
+        g_value, p_value, week_value, isdad = 2, 1, 12, False
+        contexts = query_with_context(user_input, top_k=5)
+        finaljson, source_summary = build_augmented_prompt(
+            contexts, user_input, "gemma-3-4b-it",
+            g_value=g_value, p_value=p_value, history_text=history_text,
+            week_value=week_value, isdad=isdad
+        )
 
+        response = requests.post("http://127.0.0.1:1234/v1/chat/completions",
+                                 headers={"Content-Type": "application/json"},
+                                 json=finaljson)
+        lm_response = response.json()
+        answer = lm_response["choices"][0]["message"]["content"]
+        print("Bot：" + answer)
+        append_to_memory(user_id, f"Bot: {answer}")
 
 
 if __name__ == "__main__":
-    mode = input("請選擇模式：1=CLI測試，2=Flask webhook，3=同時執行：")
+    flask_thread = threading.Thread(target=run_flask)
+    cli_thread = threading.Thread(target=run_cli)
 
-    if mode == "1":
-        run_cli()
-    elif mode == "2":
-        run_flask()
-    elif mode == "3":
-        flask_thread = threading.Thread(target=run_flask)
-        flask_thread.daemon = True
-        flask_thread.start()
-        time.sleep(1)  
+    flask_thread.start()  # 開 webhook
+    cli_thread.start()    # 開 CLI 輸入
 
-        cli_thread = threading.Thread(target=run_cli)
-        cli_thread.start()
-        cli_thread.join()
+    flask_thread.join()
+    cli_thread.join()
 
-    else:
-        print("❌ 無效選項")
