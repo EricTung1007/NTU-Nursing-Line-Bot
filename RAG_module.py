@@ -125,7 +125,6 @@ def build_augmented_prompt(
         {context_text}
 
         🗂 使用者資料：
-        • 姓名：{name_value}
         • 懷孕次數 G：{g_value}
         • 生產次數 P：{p_value}
         • 使用者身份：{isdad_status}

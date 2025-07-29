@@ -9,6 +9,7 @@ import re
 import threading
 import os
 import time
+import logging
 
 from RAG_module import query_with_context, build_augmented_prompt
 from memory_module import (
@@ -19,6 +20,10 @@ from memory_module import (
 app = Flask(__name__)
 CHANNEL_ACCESS_TOKEN = "SL10e9svEqBH/z1GZy0gBTFXijWTa31VfEmOTh9RfwrQIWHt0vWSCBHnYjsvpvPXVbOShqHnFoSAts0u2Uu1faCZZnmhDGwGV+vdzeQnclya3n8EmKBhg9D3vv/7cbST9jqf/CD1eWghmNGemLm4BAdB04t89/1O/w1cDnyilFU="
 CHANNEL_SECRET = "7810e950994952b0c7e288d593587fe8"
+
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)  # 或 logging.CRITICAL 完全靜音
+#logging.getLogger('werkzeug').setLevel(logging.INFO) #reopen
 
 def validate_signature(body, signature):
     hash = hmac.new(
@@ -350,7 +355,31 @@ def callback():
         handle_event(event)
     return "OK"
 
+def send_push(user_id, text):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}"
+    }
+    payload = {
+        "to": user_id,
+        "messages": [
+            {
+                "type": "text",
+                "text": text
+            }
+        ]
+    }
+    response = requests.post(
+        "https://api.line.me/v2/bot/message/push",
+        headers=headers,
+        data=json.dumps(payload)
+    )
+    if response.status_code != 200:
+        print(f"❌ LINE Push Error: {response.status_code} {response.text}")
+        
 def run_flask():
+    YOUR_USER_ID = "Ufe0538fc14e00b31e7fb451aff84638e" 
+    send_push(YOUR_USER_ID, "🚀 LINE Bot 已啟動，準備接受訊息！")
     app.run(host="0.0.0.0", port=5000, threaded=True)
 
 # ✅ CLI 任務：用終端機測試對話
@@ -389,7 +418,7 @@ def run_cli():
 if __name__ == "__main__":
     mode = input("請選擇模式：1=CLI測試，2=Flask webhook，3=同時執行：")
 
-    if mode == "1" or "CLI" or "cli":
+    if mode in ("1", "cli", "CLI"):
         run_cli()
     elif mode == "2":
         run_flask()
