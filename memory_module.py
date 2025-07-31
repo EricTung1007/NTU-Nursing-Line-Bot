@@ -159,7 +159,7 @@ def LLM_extract_from_text(text, system_prompt):
         return content
 
     except Exception as e:
-        print(f"⚠️ LLM Studio 提取失敗: {e}")
+        print(f"[debug]⚠️ LLM Studio 提取失敗: {e}")
 
     return None
 

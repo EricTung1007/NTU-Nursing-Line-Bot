@@ -10,6 +10,8 @@ import threading
 import os
 import time
 import logging
+import subprocess
+
 
 from RAG_module import query_with_context, build_augmented_prompt
 from memory_module import (
@@ -65,6 +67,7 @@ def send_reply(reply_token, text, user_id=None):
 
 
 def handle_event(event):
+
             if not (event.get("type") == "message" and event["message"].get("type") == "text"):
                 return
             
@@ -377,6 +380,56 @@ def send_push(user_id, text):
     if response.status_code != 200:
         print(f"❌ LINE Push Error: {response.status_code} {response.text}")
         
+def run_cloudflare_tunnel():
+    proc = subprocess.Popen(
+        ["cloudflared", "tunnel", "--url", "http://localhost:5000"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True
+    )
+
+    public_url = None
+    timeout = time.time() + 15  # 最多等 15 秒
+    while time.time() < timeout:
+        line = proc.stdout.readline()
+        if not line:
+            break
+        #print("🌐 Tunnel輸出：", line.strip())
+        match = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", line)
+        if match:
+            public_url = match.group(0)
+            break
+
+    if not public_url:
+        print("❌ 無法取得 Cloudflare 公網網址！")
+    #else:
+        #print("🌐 取得 URL：", public_url)
+
+    return public_url, proc
+
+
+def update_line_webhook(public_url):
+    time.sleep(5)
+    endpoint = f"{public_url}/callback"
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {"endpoint": endpoint}
+    try:
+        #print("⚙️ 正在更新 Webhook 到：", endpoint)
+        r = requests.put(
+            "https://api.line.me/v2/bot/channel/webhook/endpoint",
+            headers=headers,
+            data=json.dumps(payload)
+        )
+        #print("📡 Webhook 更新:", r.status_code, r.text)
+        
+        
+    except Exception as e:
+        print("❌ Webhook 更新失敗:", e)
+
+        
 def run_flask():
     YOUR_USER_ID = "Ufe0538fc14e00b31e7fb451aff84638e" 
     send_push(YOUR_USER_ID, "🚀 LINE Bot 已啟動，準備接受訊息！")
@@ -420,17 +473,30 @@ if __name__ == "__main__":
 
     if mode in ("1", "cli", "CLI"):
         run_cli()
+
     elif mode == "2":
+        public_url, tunnel_proc = run_cloudflare_tunnel()
+        if public_url:
+            print("🌐 [Debug] public_url = ", public_url)
+            update_line_webhook(public_url)
         run_flask()
+        tunnel_proc.kill()
+
     elif mode == "3":
+        public_url, tunnel_proc = run_cloudflare_tunnel()
+        if public_url:
+            update_line_webhook(public_url)
+
         flask_thread = threading.Thread(target=run_flask)
         flask_thread.daemon = True
         flask_thread.start()
-        time.sleep(1)  
+        time.sleep(1)
 
         cli_thread = threading.Thread(target=run_cli)
         cli_thread.start()
         cli_thread.join()
+
+        tunnel_proc.kill()
 
     else:
         print("❌ 無效選項")
