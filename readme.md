@@ -1,7 +1,6 @@
 python version 3.12.10
 LM studio version 0.3.15 build 11
 cloudflared.exe
-# no
 everytime opens:
 #1
  run 
@@ -10,7 +9,8 @@ everytime opens:
  
  and run
 
- cloudflared tunnel --url http://localhost:5000
+#the webhook part has been automated.
+ cloudflared tunnel --url http://localhost:5000 
 
 in console
 
@@ -38,3 +38,5 @@ i used jsonl to save all my data into combine.jsonl.
 tools are in adding data.
 run factory to make pdf to jsonl with page and title.
 run glue to glue
+
+updated it to prepare_kb.py

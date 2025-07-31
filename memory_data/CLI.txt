@@ -1,0 +1,29 @@
+G(5)P(5)W(5)IsDad(False)Name(李小明)
+User: & C:/Users/erict/AppData/Local/Microsoft/WindowsApps/python3.12.exe
+Bot: 
+您好，請提供以下資訊：
+🔸孕產史（例如：我懷過1胎，生過0胎）
+🔸目前週數（例如：目前5週）
+🔸您是否為父親（請回答：我是父親/不是父親）
+🔸您的名字（例如：小美）
+
+User: import json
+Bot: 
+您好，請提供以下資訊：
+🔸孕產史（例如：我懷過1胎，生過0胎）
+🔸目前週數（例如：目前5週）
+🔸您是否為父親（請回答：我是父親/不是父親）
+🔸您的名字（例如：小美）
+
+User: import json
+Bot: 
+您好，請提供以下資訊：
+🔸孕產史（例如：我懷過1胎，生過0胎）
+🔸目前週數（例如：目前5週）
+🔸您是否為父親（請回答：我是父親/不是父親）
+
+User: METADATA_PATH = "metadata.json"
+Bot: ✅ 已儲存您的資料：您是準媽媽，產婦曾懷胎5次，曾產5胎，目前懷胎5週，登記名字是李小明。
+您可以開始提問囉～
+User: METADATA_PATH = "metadata.json"
+Bot: 您好 👋 有什麼我可以協助的嗎？

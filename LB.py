@@ -11,7 +11,7 @@ import os
 import time
 import logging
 import subprocess
-
+from datetime import datetime
 
 from RAG_module import query_with_context, build_augmented_prompt
 from memory_module import (
@@ -324,7 +324,7 @@ def handle_event(event):
                 )
 
                 response = requests.post(
-                    "http://127.0.0.1:1234/v1/chat/completions",
+                    "http://127.0.0.1:1234/v1/chat/completions", #LMstudioIP
                     headers={"Content-Type": "application/json"},
                     json=finaljson
                 )
@@ -432,7 +432,7 @@ def update_line_webhook(public_url):
         
 def run_flask():
     YOUR_USER_ID = "Ufe0538fc14e00b31e7fb451aff84638e" 
-    send_push(YOUR_USER_ID, "🚀 LINE Bot 已啟動，準備接受訊息！")
+    send_push(YOUR_USER_ID, f"🚀 LINE Bot 已啟動，準備接受訊息！（{datetime.now()})")
     app.run(host="0.0.0.0", port=5000, threaded=True)
 
 # ✅ CLI 任務：用終端機測試對話
