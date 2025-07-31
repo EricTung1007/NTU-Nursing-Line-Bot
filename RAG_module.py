@@ -5,17 +5,19 @@ import faiss
 import numpy as np
 from typing import List, Dict
 
+from config import EMBEDDING_ENDPOINT, EMBEDDING_MODEL, INDEX_PATH, METADATA_PATH
+'''
 # 路徑 & 設定
 INDEX_PATH = "faiss_index.index"
 METADATA_PATH = "metadata.json"
 LM_STUDIO_EMBEDDING_URL = "http://localhost:1234/v1/embeddings"
 EMBEDDING_MODEL = "text-embedding-bge-small-zh-v1.5"
 LMStudioIp = "http://127.0.0.1:1234"  # ⚠ 修改成你的 LM Studio API
-
+'''
 # 輔助函式：送出 embedding 請求
 def get_embedding(text: str) -> List[float]:
     response = requests.post(
-        LM_STUDIO_EMBEDDING_URL,
+        EMBEDDING_ENDPOINT,
         headers={"Content-Type": "application/json"},
         json={"input": text, "model": EMBEDDING_MODEL}
     )

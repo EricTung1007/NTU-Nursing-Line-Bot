@@ -1,3 +1,4 @@
+#prepareKnowledgeBase.py
 import json
 import requests
 import faiss

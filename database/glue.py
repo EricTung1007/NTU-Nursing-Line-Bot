@@ -1,4 +1,4 @@
-#this glues all the jsonl together
+#glue.py
 from pathlib import Path
 
 folder = Path(".")  # 目前資料夾

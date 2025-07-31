@@ -3,13 +3,15 @@ import os
 import re
 import requests
 
-MEMORY_FOLDER = "memory_data"
+
+from config import MEMORY_FOLDER, CHAT_ENDPOINT, CHAT_MODEL
+
 if not os.path.exists(MEMORY_FOLDER):
     os.makedirs(MEMORY_FOLDER)
-
+'''
 LMStudioIp = "http://127.0.0.1:1234/"  # LM Studio API 位置
 EMBED_MODEL = "gemma-3-4b-it"          # 你的 LM 模型名稱
-
+'''
 def get_memory_file_path(user_id):
     return os.path.join(MEMORY_FOLDER, f"{user_id}.txt")
 
@@ -132,7 +134,7 @@ def LLM_extract_from_text(text, system_prompt):
     """
     try:
         lm_payload = {
-            "model": EMBED_MODEL,
+            "model": CHAT_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text}
@@ -143,7 +145,7 @@ def LLM_extract_from_text(text, system_prompt):
         }
 
         response = requests.post(
-            f"{LMStudioIp}/v1/chat/completions",
+            CHAT_ENDPOINT,
             headers={"Content-Type": "application/json"},
             json=lm_payload,
             timeout=10
@@ -159,8 +161,8 @@ def LLM_extract_from_text(text, system_prompt):
         return content
 
     except Exception as e:
-        print(f"[debug]⚠️ LLM Studio 提取失敗: {e}")
-
+        #print(f"[debug]⚠️ LLM Studio 提取失敗: {e}")
+        return None
     return None
 
 

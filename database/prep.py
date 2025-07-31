@@ -10,10 +10,15 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from config import EMBEDDING_ENDPOINT, EMBEDDING_MODEL
-
-
-
+from config import EMBEDDING_ENDPOINT, EMBEDDING_MODEL, INDEX_PATH, METADATA_PATH, JSONL_PATH
+'''
+# === 配置 ===
+LM_STUDIO_EMBEDDING_URL = "http://localhost:1234/v1/embeddings" = EMBEDDING_ENDPOINT
+EMBEDDING_MODEL = "text-embedding-bge-small-zh-v1.5"
+JSONL_PATH = "combined.jsonl"
+INDEX_PATH = "faiss_index.index"
+METADATA_PATH = "metadata.json"
+'''
 # === Spinner ===
 stop_spinner = False
 def spinner():
@@ -26,7 +31,7 @@ def spinner():
 # === 嵌入向量 ===
 def get_embedding(text: str):
     response = requests.post(
-        LM_STUDIO_EMBEDDING_URL,
+        EMBEDDING_ENDPOINT,
         headers={"Content-Type": "application/json"},
         json={"input": text, "model": EMBEDDING_MODEL}
     )

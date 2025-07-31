@@ -18,11 +18,13 @@ from memory_module import (
     append_to_memory, read_memory, update_memory_gp,get_memory_file_path,
     LLM_extract_from_text, update_memory_weeks, update_memory_isdad, update_memory_name
 )
+from config import CHAT_ENDPOINT, CHAT_MODEL, CHANNEL_ACCESS_TOKEN, CHANNEL_SECRET, LINE_WEBHOOK_ENDPOINT, LINE_PUSH_ENDPOINT, LINE_REPLY_ENDPOINT, LINE_ADMIN_USER_ID
 
 app = Flask(__name__)
-CHANNEL_ACCESS_TOKEN = "SL10e9svEqBH/z1GZy0gBTFXijWTa31VfEmOTh9RfwrQIWHt0vWSCBHnYjsvpvPXVbOShqHnFoSAts0u2Uu1faCZZnmhDGwGV+vdzeQnclya3n8EmKBhg9D3vv/7cbST9jqf/CD1eWghmNGemLm4BAdB04t89/1O/w1cDnyilFU="
-CHANNEL_SECRET = "7810e950994952b0c7e288d593587fe8"
-
+'''
+CHANNEL_ACCESS_TOKEN = CHANNEL_ACCESS_TOKEN #"SL10e9svEqBH/z1GZy0gBTFXijWTa31VfEmOTh9RfwrQIWHt0vWSCBHnYjsvpvPXVbOShqHnFoSAts0u2Uu1faCZZnmhDGwGV+vdzeQnclya3n8EmKBhg9D3vv/7cbST9jqf/CD1eWghmNGemLm4BAdB04t89/1O/w1cDnyilFU="
+CHANNEL_SECRET = CHANNEL_SECRET #"7810e950994952b0c7e288d593587fe8"
+'''
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)  # 或 logging.CRITICAL 完全靜音
 #logging.getLogger('werkzeug').setLevel(logging.INFO) #reopen
@@ -58,7 +60,7 @@ def send_reply(reply_token, text, user_id=None):
         ]
     }
     response = requests.post(
-        "https://api.line.me/v2/bot/message/reply",
+        LINE_REPLY_ENDPOINT, #"https://api.line.me/v2/bot/message/reply",
         headers=headers,
         data=json.dumps(payload)
     )
@@ -315,7 +317,7 @@ def handle_event(event):
                 finaljson, source_summary = build_augmented_prompt(
                 contexts,
                 user_question=user_text,
-                modelname="gemma-3-4b-it",
+                modelname=CHAT_MODEL,
                 g_value=g_value,
                 p_value=p_value,
                 history_text=history_text,
@@ -324,7 +326,7 @@ def handle_event(event):
                 )
 
                 response = requests.post(
-                    "http://127.0.0.1:1234/v1/chat/completions", #LMstudioIP
+                    CHAT_ENDPOINT, #LMstudioIP
                     headers={"Content-Type": "application/json"},
                     json=finaljson
                 )
@@ -373,7 +375,7 @@ def send_push(user_id, text):
         ]
     }
     response = requests.post(
-        "https://api.line.me/v2/bot/message/push",
+        LINE_PUSH_ENDPOINT, #"https://api.line.me/v2/bot/message/push",
         headers=headers,
         data=json.dumps(payload)
     )
@@ -419,7 +421,7 @@ def update_line_webhook(public_url):
     try:
         #print("⚙️ 正在更新 Webhook 到：", endpoint)
         r = requests.put(
-            "https://api.line.me/v2/bot/channel/webhook/endpoint",
+            LINE_WEBHOOK_ENDPOINT, #"https://api.line.me/v2/bot/channel/webhook/endpoint",
             headers=headers,
             data=json.dumps(payload)
         )

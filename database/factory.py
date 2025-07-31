@@ -1,3 +1,4 @@
+#factory.py
 import fitz  # PyMuPDF
 import json
 from pathlib import Path
