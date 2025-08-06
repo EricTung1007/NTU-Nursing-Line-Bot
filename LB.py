@@ -12,6 +12,9 @@ import time
 import logging
 import subprocess
 from datetime import datetime
+import sys
+sys.path.append(os.path.dirname(__file__))
+
 
 from RAG_module import query_with_context, build_augmented_prompt
 from memory_module import (
@@ -217,6 +220,10 @@ def handle_event(event):
                 【示例10】
                 輸入：「我是吳子翔，是母親，已經懷孕5次，生產0次，目前懷孕5週。」
                 輸出：G(5)P(0)W(5)IsDad(False)Name(吳子翔)
+                
+                【示例11】
+                輸入：「你好」
+                輸出：G()P()W()IsDad()Name()
 
                 """
 
@@ -443,7 +450,11 @@ def run_cli():
     path = get_memory_file_path("CLI")
     if os.path.exists(path):
         os.remove(path)
-        
+    print("""Bot:您好，我是產科與母嬰照護顧問。
+            \n請輸入以下基本資訊即可開始問答:
+            \n懷孕次數(包含本次懷孕)、已生產次數、週數、名字、是否為父親。
+            \n例如生過一胎，正要生第二胎的母親可回答:
+            \n我是XXX，是母親，已經懷孕2次，生產1次，目前懷孕10周。""")
     while True:
         user_input = input("你：")
         if user_input.lower() in ["exit", "quit"]:

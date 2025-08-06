@@ -3,7 +3,7 @@ import json
 import requests
 import faiss
 import numpy as np
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from config import EMBEDDING_ENDPOINT, EMBEDDING_MODEL, INDEX_PATH, METADATA_PATH
 '''
@@ -147,7 +147,7 @@ def build_augmented_prompt(
 
 
 # 📝 摘要 context 並集中來源
-def summarize_context_with_pages(contexts: List[Dict], user_question: str) -> (str, str):
+def summarize_context_with_pages(contexts: List[Dict], user_question: str) -> Tuple[str, str]:
     # 合併所有文字內容
     combined_text = "\n\n".join([
         f"{c['text']}" for c in contexts
