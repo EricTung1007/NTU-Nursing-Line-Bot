@@ -21,7 +21,7 @@ from memory_module import (
     append_to_memory, read_memory, update_memory_gp,get_memory_file_path,
     LLM_extract_from_text, update_memory_weeks, update_memory_isdad, update_memory_name
 )
-from config import CHAT_ENDPOINT, CHAT_MODEL, CHANNEL_ACCESS_TOKEN, CHANNEL_SECRET, LINE_WEBHOOK_ENDPOINT, LINE_PUSH_ENDPOINT, LINE_REPLY_ENDPOINT, LINE_ADMIN_USER_ID
+from config import CHAT_ENDPOINT, CHAT_MODEL, CHANNEL_ACCESS_TOKEN, CHANNEL_SECRET, LINE_WEBHOOK_ENDPOINT, LINE_PUSH_ENDPOINT, LINE_REPLY_ENDPOINT, LINE_ADMIN_USER_ID, NOFTIFY_USER_IDS
 
 app = Flask(__name__)
 '''
@@ -177,13 +177,13 @@ def handle_event(event):
                         #print(f"[DEBUG] 檢查欄位：{field} → {match.group(0)}")
 
 
-
+#太太晚上頻尿怎麼辦?
 
             if missing_fields:
                 examples = """
                 【示例1】
-                輸入：「懷孕3次，生產一次，目前10週」
-                輸出：G(3)P(1)W(10)IsDad()Name()
+                輸入:「我是華璽，是父親。太太已經懷孕3次，流產2次，目前第3次，懷孕33週的雙胞胎」
+                輸出：G(3)P(0)W(33)IsDad(True)Name(華璽)
 
                 【示例2】
                 輸入：「我是爸爸」
@@ -222,9 +222,8 @@ def handle_event(event):
                 輸出：G(5)P(0)W(5)IsDad(False)Name(吳子翔)
                 
                 【示例11】
-                輸入：「你好」
-                輸出：G()P()W()IsDad()Name()
-
+                輸入：「流產2次」
+                輸出：G()P(0)W()IsDad()Name()
                 """
 
                 system_prompt = (
@@ -306,8 +305,8 @@ def handle_event(event):
                     summary_text += f"登記名字是{name_value}。"
 
 
-                    # 發送訊息
-                    send_reply(reply_token, summary_text + "\n您可以開始提問囉～", user_id)
+                    # 發送訊息(流產提取易出錯)
+                    send_reply(reply_token, """summary_text""" + "\n您可以開始提問囉～", user_id)
                     return "OK"
 
             # ✅ 所有資料齊全，開始正常對話
@@ -346,7 +345,21 @@ def handle_event(event):
             except Exception as e:
                 print(f"LM Studio request error: {e}")
                 
-                generated_text = "❌ 抱歉，目前無法取得回應，請稍後再試。"
+                print(f"[DEBUG] CHAT_ENDPOINT={CHAT_ENDPOINT}")
+                print(f"[DEBUG] FinalJson={json.dumps(finaljson, ensure_ascii=False)[:2000]}")
+                try:
+                    r = requests.post(CHAT_ENDPOINT, headers={"Content-Type": "application/json"},
+                                    json=finaljson, timeout=30)
+                    print(f"[DEBUG] Status={r.status_code}")
+                    print(f"[DEBUG] Body={r.text[:2000]}")
+                    r.raise_for_status()
+                    lm_response = r.json()
+                except Exception as e:
+                    import traceback
+                    print("LM Studio request error:", repr(e))
+                    print(traceback.format_exc())
+                    generated_text = "❌ 抱歉，目前無法取得回應，請稍後再試。"
+
 
 
             send_reply(reply_token, generated_text, user_id)
@@ -440,8 +453,9 @@ def update_line_webhook(public_url):
 
         
 def run_flask():
-    YOUR_USER_ID = "Ufe0538fc14e00b31e7fb451aff84638e" 
-    send_push(YOUR_USER_ID, f"🚀 LINE Bot 已啟動，準備接受訊息！（{datetime.now()})")
+    for NOFTIFY_USER_ID in NOFTIFY_USER_IDS:
+        send_push(NOFTIFY_USER_ID, f"[後臺訊息]LINE Bot 已啟動（{datetime.now()})")
+        
     app.run(host="0.0.0.0", port=5000, threaded=True)
 
 # ✅ CLI 任務：用終端機測試對話
