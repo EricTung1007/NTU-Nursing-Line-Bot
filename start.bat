@@ -26,6 +26,6 @@ if errorlevel 1 (
 )
 
 REM ✅ 啟動 Flask Bot
-python-3.12\python.exe LB.py 2
+python.exe LB.py 2
 
 pause
