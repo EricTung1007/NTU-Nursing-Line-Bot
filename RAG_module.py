@@ -5,15 +5,9 @@ import faiss
 import numpy as np
 from typing import List, Dict, Tuple
 
+from prompts import no_data_system_prompt, normal_system_prompt
 from config import EMBEDDING_ENDPOINT, EMBEDDING_MODEL, INDEX_PATH, METADATA_PATH
-'''
-# 路徑 & 設定
-INDEX_PATH = "faiss_index.index"
-METADATA_PATH = "metadata.json"
-LM_STUDIO_EMBEDDING_URL = "http://localhost:1234/v1/embeddings"
-EMBEDDING_MODEL = "text-embedding-bge-small-zh-v1.5"
-LMStudioIp = "http://127.0.0.1:1234"  # ⚠ 修改成你的 LM Studio API
-'''
+
 # 輔助函式：送出 embedding 請求
 def get_embedding(text: str) -> List[float]:
     response = requests.post(
@@ -83,19 +77,12 @@ def build_augmented_prompt(
 
     # 🟡 fallback：沒有資料
     if contexts is None or len(contexts) == 0 or not context_text.strip():
-        fallback_system_message = (
-            "你是一位產科與母嬰護理顧問。凡與孕期、產後或母嬰健康相關的症狀（例：頻尿、腰痠、胃脹氣、抽筋、睡眠、胎動、飲食、運動、產兆、哺乳）皆屬產科範圍。\n"
-            "規則：\n"
-            "1) 問候語→ 回：「您好，有什麼我可以協助的嗎？」\n"
-            "2) 非孕產議題（程式、占卜等）→ 回覆不處理。\n"
-            "3) 找不到資料→ 先給通用安全建議，再提醒就醫與可用諮詢管道。"
-        )
 
         #print("[⚠️ Fallback] No context found, using fallback message.")
         return {
         "model": modelname,
         "messages": [
-            {"role": "system", "content": fallback_system_message},
+            {"role": "system", "content": no_data_system_prompt},
             {"role": "user", "content": f"{user_question}（⚠ 查無相關資料）"}
         ],
         "temperature": 0.4,
@@ -106,26 +93,9 @@ def build_augmented_prompt(
 
     # 🟢 正常提示詞
     system_message = f"""
-        你是一位專業【產科與母嬰照護顧問】，僅依據下方提供的參考資料解答懷孕相關問題。
-        凡與孕期、產後或母嬰健康相關的常見症狀（如：頻尿、腰痠、抽筋、火燒心、便祕、失眠、胎動、飲食與運動）均視為產科範圍。
-
-        🟩 回應規則：
-        • 回答限150字內（最多200字），專業、簡潔。
-        • 聚焦提問主題與可行建議，不複誦全部 context。
-        • 不主動加結尾提問。
-        • 非孕產議題不處理（心理諮商、程式、占卜等）。
-
-        🟦 身分調整：
-        • 準媽媽→ 以第一人稱對她建議。
-        • 準爸爸→ 強調可協助與陪伴的具體作法。
-        • 未知→ 使用中性表述。
-
-        🟥 若資料不足：
-        先給通用安全建議（警示症狀與就醫時機），再附就醫與諮詢管道。
-
+        {normal_system_prompt}\n
         📖 參考資料：
-        {context_text}
-
+        {context_text}\n
         🗂 使用者資料：
         • 懷孕次數 G：{g_value}
         • 生產次數 P：{p_value}

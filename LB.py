@@ -15,7 +15,7 @@ from datetime import datetime
 import sys
 sys.path.append(os.path.dirname(__file__))
 
-
+from prompts import fields_examples, fields_system_prompt, greet_message
 from RAG_module import query_with_context, build_augmented_prompt
 from memory_module import (
     append_to_memory, read_memory, update_memory_gp,get_memory_file_path,
@@ -180,62 +180,16 @@ def handle_event(event):
 #太太晚上頻尿怎麼辦?
 
             if missing_fields:
-                examples = """
-                【示例1】
-                輸入:「我是華璽，是父親。太太已經懷孕3次，流產2次，目前第3次，懷孕33週的雙胞胎」
-                輸出：G(3)P(0)W(33)IsDad(True)Name(華璽)
-
-                【示例2】
-                輸入：「我是爸爸」
-                輸出：G()P()W()IsDad(True)Name()
-
-                【示例3】
-                輸入：「我叫小美」
-                輸出：G()P()W()IsDad()Name(小美)
-
-                【示例4】
-                輸入：「目前5週」
-                輸出：G()P()W(5)IsDad()Name()
-                
-                【示例5】
-                輸入：「懷過五胎，生過5胎」
-                輸出：G(5)P(5)W()IsDad()Name()
-
-                【示例6】
-                輸入：「已懷孕2次、落地一胎」
-                輸出：G(2)P(1)W()IsDad()Name()
-                
-                【示例7】
-                輸入：「懷過八胎」
-                輸出：G(8)P()W()IsDad()Name()
-                
-                【示例8】
-                輸入：「懷過一胎，還沒生」
-                輸出：G(1)P(0)W()IsDad()Name()
-                
-                【示例9】
-                輸入：「懷過一胎，生過0胎」
-                輸出：G(1)P(0)W()IsDad()Name()
-                
-                【示例10】
-                輸入：「我是吳子翔，是母親，已經懷孕5次，生產0次，目前懷孕5週。」
-                輸出：G(5)P(0)W(5)IsDad(False)Name(吳子翔)
-                
-                【示例11】
-                輸入：「流產2次」
-                輸出：G()P(0)W()IsDad()Name()
+                """
+                fields_examples = 
+                fields_examples
                 """
 
                 system_prompt = (
                     f"已知欄位：{first_line.strip()}。\n"
                     f"請從以下文字補充缺失欄位：{', '.join(missing_fields)}。\n"
-                    "⚠️ 已知欄位不要修改。\n"
-                    "⚠️ 僅回傳缺失欄位的格式，例如：G(5)P(3)、W(10)、IsDad(True)、Name(Alice)。\n"
-                    "⚠️ 如果文字中有明確資料，即便語意不同（例如：『懷過5胎』、『生產過3次』），也要提取對應數值。\n"
-                    "⚠️ 如果缺少明確回答，請保持欄位空白，例如：G()P()W()IsDad()Name()\n"
-                    "❌ 不要根據名字或上下文推測欄位值。\n"
-                    "不要回覆任何其他內容。\n\n"
-                    f"{examples}"
+                    f"{fields_system_prompt}\n"
+                    f"{fields_examples}"
                 )
 
 
@@ -464,11 +418,7 @@ def run_cli():
     path = get_memory_file_path("CLI")
     if os.path.exists(path):
         os.remove(path)
-    print("""Bot:您好，我是產科與母嬰照護顧問。
-            \n請輸入以下基本資訊即可開始問答:
-            \n懷孕次數(包含本次懷孕)、已生產次數、週數、名字、是否為父親。
-            \n例如生過一胎，正要生第二胎的母親可回答:
-            \n我是XXX，是母親，已經懷孕2次，生產1次，目前懷孕10周。""")
+    print(greet_message)
     while True:
         user_input = input("你：")
         if user_input.lower() in ["exit", "quit"]:
