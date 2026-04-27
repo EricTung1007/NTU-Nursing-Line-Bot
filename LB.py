@@ -15,7 +15,7 @@ from datetime import datetime
 import sys
 sys.path.append(os.path.dirname(__file__))
 
-from prompts import fields_examples, fields_system_prompt, greet_message
+from prompts import fields_examples, fields_system_prompt, greet_message, no_data_reply
 from RAG_module import query_with_context, build_augmented_prompt
 from memory_module import (
     append_to_memory, read_memory, update_memory_gp,get_memory_file_path,
@@ -72,7 +72,7 @@ def send_reply(reply_token, text, user_id=None):
 
 
 def handle_event(event):
-
+            import re
             if not (event.get("type") == "message" and event["message"].get("type") == "text"):
                 return
             
@@ -260,11 +260,14 @@ def handle_event(event):
 
 
                     # 發送訊息(流產提取易出錯)
-                    send_reply(reply_token, """summary_text""" + "\n您可以開始提問囉～", user_id)
+                    send_reply(reply_token, summary_text + "\n您可以開始提問囉～", user_id)
                     return "OK"
 
             # ✅ 所有資料齊全，開始正常對話
-            history_text = "\n".join(memory_content.splitlines()[1:])
+
+            entries = re.split(r'(?=User:\s)', memory_content)
+            entries = [e.strip() for e in entries if e.strip()]
+            history_text = "\n\n".join(entries[-10:])
             gp_match = re.search(r"G\((\d+)\)P\((\d+)\)", first_line)
             week_match = re.search(r"W\((\d+)\)", first_line)
             isdad_match = re.search(r"IsDad\((True|False)\)", first_line)
@@ -285,16 +288,19 @@ def handle_event(event):
                 isdad=isdad_value
                 )
 
-                response = requests.post(
-                    CHAT_ENDPOINT, #LMstudioIP
-                    headers={"Content-Type": "application/json"},
-                    json=finaljson
-                )
-                #print(f"[DEBUG]FinalJson:{finaljson}")
-                lm_response = response.json()
-                generated_text = lm_response["choices"][0]["message"]["content"].strip()
-                if source_summary:
-                    generated_text += f"\n資料來源: {source_summary}"
+                if finaljson is None:
+                    generated_text = no_data_reply
+                else:
+                    response = requests.post(
+                        CHAT_ENDPOINT, #LMstudioIP
+                        headers={"Content-Type": "application/json"},
+                        json=finaljson
+                    )
+                    #print(f"[DEBUG]FinalJson:{finaljson}")
+                    lm_response = response.json()
+                    generated_text = lm_response["choices"][0]["message"]["content"].strip()
+                    if source_summary:
+                        generated_text += f"\n資料來源: {source_summary}"
                     
             except Exception as e:
                 print(f"LM Studio request error: {e}")
@@ -446,7 +452,10 @@ def run_cli():
 
 
 if __name__ == "__main__":
-    mode = input("請選擇模式：1=CLI測試，2=Flask webhook，3=同時執行：")
+    if len(sys.argv) > 1:
+        mode = sys.argv[1]
+    else:
+        mode = input("請選擇模式：1=CLI測試，2=Flask webhook，3=同時執行：")
 
     if mode in ("1", "cli", "CLI"):
         run_cli()

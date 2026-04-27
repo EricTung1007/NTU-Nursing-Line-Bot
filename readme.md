@@ -42,3 +42,7 @@ run factory to make pdf to jsonl with page and title.
 run glue to glue
 
 updated it to prepare_kb.py
+
+ python -m PyInstaller --clean --onedir --console --name NTULineBot product_entry.py 
+ For packgin
+ 

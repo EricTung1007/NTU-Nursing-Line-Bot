@@ -4,16 +4,19 @@ NOFTIFY_USER_IDS = ["Ufe0538fc14e00b31e7fb451aff84638e"]  # 用於啟動通知�
 
 # LM Studio 伺服器設定
 LM_STUDIO_HOST = "http://127.0.0.1:1234"
+#LM_STUDIO_HOST = "http://192.168.0.103:1234"#professor's computer
 EMBEDDING_ENDPOINT = f"{LM_STUDIO_HOST}/v1/embeddings"
 CHAT_ENDPOINT = f"{LM_STUDIO_HOST}/v1/chat/completions"
 
 # LM 模型名稱（請依實際修改）
 EMBEDDING_MODEL = "text-embedding-bge-small-zh-v1.5"
-#CHAT_MODEL = "Qwen2.5-3B-Instruct"  
-CHAT_MODEL = "Qwen2.5-7B-Instruct"  #可行
+#CHAT_MODEL = "Qwen3-0.6B"  
+#CHAT_MODEL = "llama-3.3-8b-instruct-128k"
+#CHAT_MODEL = "Qwen2.5-7B-Instruct"  #可行
 #CHAT_MODEL = "gpt-OSS-20B"  
-#CHAT_MODEL = "gemma-3-4B-instruct" #太笨，沒辦法正常執行目前版本
+#CHAT_MODEL = "gemma-3-4B-instruct" #太笨，沒辦法正常執行目前版本 2026-01-17更新 量化問題 需重新測試
 #CHAT_MODEL = "gemma-3-7B-instruct" 
+CHAT_MODEL = "gemma-3-1B"
 
 # LINE Bot 機密
 CHANNEL_ACCESS_TOKEN = "SL10e9svEqBH/z1GZy0gBTFXijWTa31VfEmOTh9RfwrQIWHt0vWSCBHnYjsvpvPXVbOShqHnFoSAts0u2Uu1faCZZnmhDGwGV+vdzeQnclya3n8EmKBhg9D3vv/7cbST9jqf/CD1eWghmNGemLm4BAdB04t89/1O/w1cDnyilFU="

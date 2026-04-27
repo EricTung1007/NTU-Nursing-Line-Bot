@@ -5,7 +5,7 @@ import faiss
 import numpy as np
 from typing import List, Dict, Tuple
 
-from prompts import no_data_system_prompt, normal_system_prompt
+from prompts import normal_system_prompt
 from config import EMBEDDING_ENDPOINT, EMBEDDING_MODEL, INDEX_PATH, METADATA_PATH
 
 # 輔助函式：送出 embedding 請求
@@ -32,7 +32,7 @@ def query_with_context(user_message: str, top_k: int = 10) -> List[Dict]:
 
     results = []
     for dist, idx in zip(D[0], I[0]):
-        if dist < 1.0:  # ⚠️ 放寬距離門檻
+        if dist < 1.2:  # ⚠️ 放寬距離門檻
             results.append(metadatas[idx])
 
     if not results:
@@ -79,16 +79,7 @@ def build_augmented_prompt(
     if contexts is None or len(contexts) == 0 or not context_text.strip():
 
         #print("[⚠️ Fallback] No context found, using fallback message.")
-        return {
-        "model": modelname,
-        "messages": [
-            {"role": "system", "content": no_data_system_prompt},
-            {"role": "user", "content": f"{user_question}（⚠ 查無相關資料）"}
-        ],
-        "temperature": 0.4,
-        "max_tokens": 10000,
-        "stream": False
-        }, None  # ⬅ 注意這個 None 是 source_summary 的佔位
+        return None, None
 
 
     # 🟢 正常提示詞
@@ -101,6 +92,7 @@ def build_augmented_prompt(
         • 生產次數 P：{p_value}
         • 使用者身份：{isdad_status}
         • 目前孕週：{week_value or '未提供'} 週，{trimester}
+        • 歷史對話紀錄：{history_text} 
         """
 
     #print("[DEBUG]正常問答輸入 system_message: ", system_message)
@@ -108,8 +100,7 @@ def build_augmented_prompt(
     return {
         "model": modelname,
         "messages": [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_question}
+            {"role": "user", "content": f"{system_message}\n\n使用者問題：\n{user_question}"}
         ],
         "temperature": 0.6,
         "max_tokens": 600,

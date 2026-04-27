@@ -26,6 +26,7 @@ if errorlevel 1 (
 )
 
 REM ✅ 啟動 Flask Bot
-python.exe LB.py 2
+set PYTHONIOENCODING=utf-8
+python.exe -X utf8 LB.py
 
 pause

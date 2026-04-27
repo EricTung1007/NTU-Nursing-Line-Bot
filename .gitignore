@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+*.spec
+.DS_Store
+*.exe
+*.zip
+!database/
+!memory_data/
+!combined.jsonl
+!faiss_index.index
+._*
+.DS_Store
