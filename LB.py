@@ -280,10 +280,16 @@ def handle_event(event):
                 CHAT_ENDPOINT,
                 headers={"Content-Type": "application/json"},
                 json=finaljson,
-                timeout=60
+                timeout=120
             )
             lm_response = response.json()
-            generated_text = lm_response["choices"][0]["message"]["content"].strip()
+            msg = lm_response["choices"][0]["message"]
+            generated_text = (msg.get("content") or "").strip()
+            # Fallback for thinking/reasoning models
+            if not generated_text:
+                generated_text = (msg.get("reasoning_content") or "").strip()
+            if not generated_text:
+                generated_text = "❌ 模型未產生回應，請稍後再試。"
             if source_summary:
                 generated_text += f"\n資料來源: {source_summary}"
 
@@ -496,6 +502,12 @@ def _ensure_models_loaded():
     """Check if required models are loaded, auto-load if not."""
     from config import EMBEDDING_MODEL, CHAT_MODEL, LM_STUDIO_HOST
 
+    # CHAT_MODEL_KEY is the path/key for lms load; falls back to CHAT_MODEL
+    try:
+        from config import CHAT_MODEL_KEY
+    except ImportError:
+        CHAT_MODEL_KEY = CHAT_MODEL
+
     loaded = _get_loaded_models()
     if loaded is None:
         # Server not reachable — try starting it
@@ -532,8 +544,8 @@ def _ensure_models_loaded():
     # Check chat model
     chat_loaded = any(CHAT_MODEL in mid for mid in loaded)
     if not chat_loaded:
-        logger.info("📦 Chat model '%s' not loaded — loading...", CHAT_MODEL)
-        if not _lms_load(CHAT_MODEL, identifier=CHAT_MODEL):
+        logger.info("📦 Chat model '%s' not loaded — loading via key '%s'...", CHAT_MODEL, CHAT_MODEL_KEY)
+        if not _lms_load(CHAT_MODEL_KEY, identifier=CHAT_MODEL):
             return False
         time.sleep(2)
 

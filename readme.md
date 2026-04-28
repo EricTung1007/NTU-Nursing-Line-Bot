@@ -1,33 +1,46 @@
-# NTU Nursing LINE Bot 🏥
+[**中文版 README**](README.zh-TW.md) ｜ English
 
-A RAG-powered (Retrieval-Augmented Generation) LINE chatbot for **obstetric & maternal-infant care** at National Taiwan University Hospital. The bot answers pregnancy-related questions using locally-hosted LLMs via [LM Studio](https://lmstudio.ai/) and a FAISS vector knowledge base built from official health education PDFs.
+# AI-Driven Prenatal Education LINE Bot
 
-## Features
+This repository contains the working capstone prototype for a bilingual Chinese/English prenatal education chatbot developed at National Taiwan University. The system integrates a locally hosted large language model with retrieval-augmented generation grounded in curated maternal health education materials from official Taiwanese health sources.
 
-- **LINE Messaging API** — receives and replies to messages on LINE
-- **RAG pipeline** — retrieves relevant passages from a FAISS index, then generates answers with a local LLM
-- **User memory** — tracks each user's pregnancy profile (`G/P`, gestational weeks, name, parent role) across conversations
-- **Cloudflare Tunnel** — auto-creates a public URL and updates the LINE webhook so no static server is needed
-- **CLI mode** — test the full conversation flow locally without LINE
+The project was designed as a low-cost, privacy-conscious prototype that could deliver personalized prenatal education through LINE, a communication platform already familiar to many users in Taiwan. Its broader purpose was to explore how clinically grounded AI systems can improve access to trustworthy health education without requiring new apps, new accounts, or full dependence on commercial cloud services.
+
+## Research Objective
+
+- Improve accessibility and consistency of prenatal health education.
+- Reduce hallucination risk by grounding responses in verified health education materials.
+- Explore whether locally deployable AI can support multilingual, clinically aligned health communication in everyday care settings.
+- Reduce adoption friction by using a communication platform already familiar to the target population.
+
+## System Overview
+
+- **Interface**: Flask + LINE Messaging API.
+- **Generation**: locally hosted chat model through LM Studio or OpenAI-compatible endpoint.
+- **Retrieval**: FAISS vector index over curated obstetric and maternal health education content.
+- **Personalization**: pregnancy week, gravida/parity, parental role, and user name.
+- **Memory**: lightweight per-user memory file for context continuity.
 
 ## Architecture
 
 ```
 LINE App ──▶ Cloudflare Tunnel ──▶ Flask /callback ──▶ handle_event()
                                                         │
-                                                        ├─ memory_module  (per-user .txt files)
+                                                        ├─ memory_module  (per-user profile & history)
                                                         ├─ RAG_module     (FAISS + LM Studio embeddings)
                                                         └─ LM Studio     (chat completion)
 ```
 
+## Main Files
+
 | File | Purpose |
 |---|---|
-| `LB.py` | Main app — Flask webhook, event handler, CLI, tunnel setup |
+| `LB.py` | LINE webhook handling and response orchestration |
 | `config.py` | All configuration (reads secrets from `.env`) |
 | `prompts.py` | System prompts and few-shot examples |
-| `RAG_module.py` | Embedding search + prompt builder |
-| `memory_module.py` | Per-user profile & conversation memory |
-| `prep.py` | One-time script: PDF → JSONL → FAISS index |
+| `RAG_module.py` | Retrieval and augmented prompt construction |
+| `memory_module.py` | User-specific memory and profile extraction |
+| `prep.py` | Knowledge base preparation (PDF → JSONL → FAISS) |
 | `product_entry.py` | PyInstaller entry point for packaged builds |
 | `start.bat` | One-click Windows launcher (starts LM Studio + bot) |
 
@@ -36,7 +49,7 @@ LINE App ──▶ Cloudflare Tunnel ──▶ Flask /callback ──▶ handle_
 - **Python** 3.12+
 - **LM Studio** 0.3.x — load the following models:
   1. `text-embedding-bge-small-zh-v1.5` (embedding)
-  2. `gemma-3-1B` (chat) — or any model you prefer; update `CHAT_MODEL` in `config.py`
+  2. A chat model of your choice (update `CHAT_MODEL` in `config.py`)
 - **Cloudflare Tunnel** (`cloudflared` CLI) — for public webhook exposure
 - A **LINE Messaging API** channel ([developer console](https://developers.line.biz/console/))
 
@@ -70,11 +83,7 @@ python prep.py
 
 This converts PDFs → JSONL → FAISS vector index.
 
-### 4. Start LM Studio
-
-Open LM Studio and load the embedding model and chat model (in that order).
-
-### 5. Run the bot
+### 4. Run the bot
 
 **Option A — One-click (Windows):**
 
@@ -93,6 +102,8 @@ You'll be prompted to choose a mode:
 - `2` — Flask webhook mode (LINE bot)
 - `3` — Both simultaneously
 
+Models are automatically loaded into LM Studio on startup if not already present.
+
 ## Data Correction Commands (LINE)
 
 Users can correct their profile by sending messages starting with `更正`:
@@ -104,6 +115,10 @@ Users can correct their profile by sending messages starting with `更正`:
 | Weeks only | `更正W(20)` |
 | Parent role | `更正IsDad(True)` |
 | Name only | `更正Name(小華)` |
+
+## Current Status and Limitations
+
+This repository reflects an academic prototype used for a poster presentation and technical demonstration. Current evaluation is preliminary and scenario-based. The system has not yet undergone large-scale user testing or clinical deployment.
 
 ## Packaging (optional)
 

@@ -54,13 +54,11 @@ LMS_CLI_PATH = os.environ.get("LMS_CLI_PATH", _default_lms)
 
 # LM Model Names (change to match models loaded in LM Studio)
 EMBEDDING_MODEL = "text-embedding-bge-small-zh-v1.5"
-#CHAT_MODEL = "Qwen3-0.6B"
-#CHAT_MODEL = "llama-3.3-8b-instruct-128k"
-#CHAT_MODEL = "Qwen2.5-7B-Instruct"       # 可行
-#CHAT_MODEL = "gpt-OSS-20B"
-#CHAT_MODEL = "gemma-3-4B-instruct"        # 量化問題 需重新測試
-#CHAT_MODEL = "gemma-3-7B-instruct"
-CHAT_MODEL = "gemma-3-1B"
+
+# CHAT_MODEL = the API identifier (used in requests)
+# CHAT_MODEL_KEY = the model key or path for `lms load` (can differ from API name)
+CHAT_MODEL = "Qwen3.5-4B"
+CHAT_MODEL_KEY = "D:/Proj. Minerva's Den/models/lmstudio-community/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_M.gguf"
 
 # ---------------------------------------------------------------------------
 # LINE API Endpoints

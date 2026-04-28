@@ -131,6 +131,7 @@ def update_memory_name(user_id, name_value):
 def LLM_extract_from_text(text, system_prompt):
     """
     使用 LLM 提取單一欄位，並檢查格式合法性
+    Supports both regular and thinking/reasoning models (e.g. gemma-4).
     """
     try:
         lm_payload = {
@@ -140,7 +141,7 @@ def LLM_extract_from_text(text, system_prompt):
                 {"role": "user", "content": text}
             ],
             "temperature": 0.1,
-            "max_tokens": 50,  # 稍微提高以避免截斷
+            "max_tokens": 300,  # Reasoning models need headroom for thinking + answer
             "stream": False
         }
 
@@ -148,12 +149,38 @@ def LLM_extract_from_text(text, system_prompt):
             CHAT_ENDPOINT,
             headers={"Content-Type": "application/json"},
             json=lm_payload,
-            timeout=10
+            timeout=30
         )
         result = response.json()
-        content = result["choices"][0]["message"]["content"].strip()
+        msg = result["choices"][0]["message"]
 
-        # ✅ 檢查 LLM 回傳格式
+        # Get content — thinking models may put output in reasoning_content
+        content = (msg.get("content") or "").strip()
+        if not content:
+            # Fallback: extract from reasoning_content for thinking models
+            reasoning = (msg.get("reasoning_content") or "").strip()
+            if reasoning:
+                # Try to find the structured output within the reasoning text
+                field_match = re.search(
+                    r"(G\(\d*\)\s*P\(\d*\)\s*W\(\d*\)\s*IsDad\([^)]*\)\s*Name\([^)]*\))",
+                    reasoning
+                )
+                if field_match:
+                    content = field_match.group(1)
+                else:
+                    # Try to find any individual field patterns
+                    parts = []
+                    for pat in [r"G\(\d+\)\s*P\(\d+\)", r"W\(\d+\)", r"IsDad\((True|False|1|0)\)", r"Name\([^)]+\)"]:
+                        m = re.search(pat, reasoning)
+                        if m:
+                            parts.append(m.group(0))
+                    content = "".join(parts) if parts else ""
+
+        if not content:
+            logger.debug("LLM returned empty content and no usable reasoning")
+            return None
+
+        # Check format validity
         if not re.search(r"(G\(\d+\)\s*P\(\d+\))?|W\(\d+\)|IsDad\((True|False|1|0)\)|Name\(.+\)", content):
             logger.warning("LLM 回傳格式錯誤: %s", content)
             return None

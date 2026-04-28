@@ -120,7 +120,7 @@ def build_augmented_prompt(
             {"role": "user", "content": f"{system_message}\n\n使用者問題：\n{user_question}"}
         ],
         "temperature": 0.6,
-        "max_tokens": 600,
+        "max_tokens": 1200,  # Reasoning models need headroom for thinking + answer
         "stream": False
     }, source_summary
 
