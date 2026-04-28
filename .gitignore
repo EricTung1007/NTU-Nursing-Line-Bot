@@ -7,9 +7,19 @@ dist/
 .DS_Store
 *.exe
 *.zip
+._*
+
+# Secrets — never commit the real .env
+.env
+
+# User memory files contain PII
+memory_data/*.txt
+
+# Large binary artifacts (re-generated locally)
+faiss_index.index
+metadata.json
+combined.jsonl
+
+# Keep folder structure
 !database/
 !memory_data/
-!combined.jsonl
-!faiss_index.index
-._*
-.DS_Store

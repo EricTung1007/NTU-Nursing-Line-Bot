@@ -1,17 +1,17 @@
 # memory module
 import os
 import re
+import logging
 import requests
 
 
 from config import MEMORY_FOLDER, CHAT_ENDPOINT, CHAT_MODEL
 
+logger = logging.getLogger(__name__)
+
 if not os.path.exists(MEMORY_FOLDER):
     os.makedirs(MEMORY_FOLDER)
-'''
-LMStudioIp = "http://127.0.0.1:1234/"  # LM Studio API 位置
-EMBED_MODEL = "gemma-3-4b-it"          # 你的 LM 模型名稱
-'''
+
 def get_memory_file_path(user_id):
     return os.path.join(MEMORY_FOLDER, f"{user_id}.txt")
 
@@ -155,56 +155,13 @@ def LLM_extract_from_text(text, system_prompt):
 
         # ✅ 檢查 LLM 回傳格式
         if not re.search(r"(G\(\d+\)\s*P\(\d+\))?|W\(\d+\)|IsDad\((True|False|1|0)\)|Name\(.+\)", content):
-            print(f"⚠️ 格式錯誤: {content}")
+            logger.warning("LLM 回傳格式錯誤: %s", content)
             return None
 
         return content
 
     except Exception as e:
-        #print(f"[debug]⚠️ LLM Studio 提取失敗: {e}")
+        logger.debug("LLM Studio 提取失敗: %s", e)
         return None
-    return None
 
-
-
-
-
-def extract_gp_and_weeks_from_text(text):
-    """
-    嘗試同時從文字提取 G/P、W(週數)、IsDad 和 Name
-    """
-    wholevalue = LLM_extract_from_text(text)
-    if not wholevalue:
-        return None, None, None, None
-
-    # 用正則從 wholevalue 拆出 G/P, W, IsDad, Name
-    gp_match = re.search(r"G\((\d+)\)\s*P\((\d+)\)", wholevalue)
-    w_match = re.search(r"W\((\d+)\)", wholevalue)
-    isdad_match = re.search(r"IsDad\((True|False|1|0)\)", wholevalue)  # ✅ 修正
-    name_match = re.search(r"Name\((.*?)\)", wholevalue)
-
-    gp_value = None
-    week_value = None
-    isdad_value = None
-    name_value = None
-
-    if gp_match:
-        g, p = int(gp_match.group(1)), int(gp_match.group(2))
-        gp_value = f"G({g})P({p})"
-
-    if w_match:
-        week_value = int(w_match.group(1))
-
-    if isdad_match:
-        isdad_raw = isdad_match.group(1)
-        # ✅ 修正: 將 1/0 轉為 True/False
-        isdad_value = True if isdad_raw in ("True", "1") else False
-
-    if name_match:
-        name_value = name_match.group(1).strip()
-        if name_value.lower() in ("unknown", "none", ""):
-            name_value = None  # 如果是 unknown/none/空字串 當作沒填
-
-
-    return gp_value, week_value, isdad_value, name_value
 

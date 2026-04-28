@@ -1,48 +1,116 @@
-##fully automated, just run start.bat
+# NTU Nursing LINE Bot 🏥
 
-python version 3.12.10
-LM studio version 0.3.15 build 11
-cloudflared.exe
-everytime opens:
-#1
- run 
+A RAG-powered (Retrieval-Augmented Generation) LINE chatbot for **obstetric & maternal-infant care** at National Taiwan University Hospital. The bot answers pregnancy-related questions using locally-hosted LLMs via [LM Studio](https://lmstudio.ai/) and a FAISS vector knowledge base built from official health education PDFs.
 
- LB.py
- 
- and run
+## Features
 
-#the webhook part has been automated.
- cloudflared tunnel --url http://localhost:5000 
+- **LINE Messaging API** — receives and replies to messages on LINE
+- **RAG pipeline** — retrieves relevant passages from a FAISS index, then generates answers with a local LLM
+- **User memory** — tracks each user's pregnancy profile (`G/P`, gestational weeks, name, parent role) across conversations
+- **Cloudflare Tunnel** — auto-creates a public URL and updates the LINE webhook so no static server is needed
+- **CLI mode** — test the full conversation flow locally without LINE
 
-in console
+## Architecture
 
-and get the  
+```
+LINE App ──▶ Cloudflare Tunnel ──▶ Flask /callback ──▶ handle_event()
+                                                        │
+                                                        ├─ memory_module  (per-user .txt files)
+                                                        ├─ RAG_module     (FAISS + LM Studio embeddings)
+                                                        └─ LM Studio     (chat completion)
+```
 
-Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |
-2025-07-15T09:29:58Z INF |  https://xml-picnic-judgment-cause.trycloudflare.com  
+| File | Purpose |
+|---|---|
+| `LB.py` | Main app — Flask webhook, event handler, CLI, tunnel setup |
+| `config.py` | All configuration (reads secrets from `.env`) |
+| `prompts.py` | System prompts and few-shot examples |
+| `RAG_module.py` | Embedding search + prompt builder |
+| `memory_module.py` | Per-user profile & conversation memory |
+| `prep.py` | One-time script: PDF → JSONL → FAISS index |
+| `product_entry.py` | PyInstaller entry point for packaged builds |
+| `start.bat` | One-click Windows launcher (starts LM Studio + bot) |
 
-and then put the link to
+## Prerequisites
 
-https://developers.line.biz/console/channel/2006995867/messaging-api
+- **Python** 3.12+
+- **LM Studio** 0.3.x — load the following models:
+  1. `text-embedding-bge-small-zh-v1.5` (embedding)
+  2. `gemma-3-1B` (chat) — or any model you prefer; update `CHAT_MODEL` in `config.py`
+- **Cloudflare Tunnel** (`cloudflared` CLI) — for public webhook exposure
+- A **LINE Messaging API** channel ([developer console](https://developers.line.biz/console/))
 
-#2
-open up LLM studio, make 
+## Quick Start
 
-text embedding model 
-answering model 
+### 1. Clone & install dependencies
 
-running in said order.
+```bash
+git clone https://github.com/EricTung1007/NTU-Nursing-Line-Bot.git
+cd NTU-Nursing-Line-Bot
+pip install -r requirements.txt
+```
 
-then test via line.
+### 2. Configure secrets
 
-#to add file into database:
-i used jsonl to save all my data into combine.jsonl.
-tools are in adding data.
-run factory to make pdf to jsonl with page and title.
-run glue to glue
+Copy the example env file and fill in your credentials:
 
-updated it to prepare_kb.py
+```bash
+cp .env.example .env
+```
 
- python -m PyInstaller --clean --onedir --console --name NTULineBot product_entry.py 
- For packgin
- 
+Edit `.env` with your LINE channel token, secret, and user IDs. **Never commit `.env`** — it is already in `.gitignore`.
+
+### 3. Build the knowledge base (first time only)
+
+Place your PDF files in the `database/` folder, then run:
+
+```bash
+python prep.py
+```
+
+This converts PDFs → JSONL → FAISS vector index.
+
+### 4. Start LM Studio
+
+Open LM Studio and load the embedding model and chat model (in that order).
+
+### 5. Run the bot
+
+**Option A — One-click (Windows):**
+
+```bash
+start.bat
+```
+
+**Option B — Manual:**
+
+```bash
+python LB.py
+```
+
+You'll be prompted to choose a mode:
+- `1` — CLI test mode (chat in your terminal)
+- `2` — Flask webhook mode (LINE bot)
+- `3` — Both simultaneously
+
+## Data Correction Commands (LINE)
+
+Users can correct their profile by sending messages starting with `更正`:
+
+| Command | Example |
+|---|---|
+| Full profile | `更正G(2)P(1)W(10)IsDad(False)Name(小美)` |
+| G/P only | `更正G(3)P(1)` |
+| Weeks only | `更正W(20)` |
+| Parent role | `更正IsDad(True)` |
+| Name only | `更正Name(小華)` |
+
+## Packaging (optional)
+
+```bash
+python -m PyInstaller --clean --onedir --console --name NTULineBot product_entry.py
+```
+
+## License
+
+This project is intended for academic and clinical education use at NTU Hospital.

@@ -56,17 +56,5 @@ def main():
         print("無效選項")
 
 if __name__ == "__main__":
-    main()
-
-
-if __name__ == "__main__":
     os.chdir(exe_dir())
-
-    public_url, tunnel_proc = run_cloudflare_tunnel_portable(port=5000)
-    # 建議保留這行，方便你確認每次網址是否更新
-    print("public_url =", public_url)
-
-    if public_url:
-        update_line_webhook(public_url)
-
-    run_flask()
+    main()
