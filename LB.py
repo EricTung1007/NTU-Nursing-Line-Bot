@@ -11,6 +11,7 @@ import os
 import time
 import logging
 import subprocess
+import shutil
 from datetime import datetime
 import sys
 
@@ -24,6 +25,7 @@ from memory_module import (
 )
 from config import (
     CHAT_ENDPOINT, CHAT_MODEL, CHANNEL_ACCESS_TOKEN, CHANNEL_SECRET,
+    COMPLETIONS_ENDPOINT,
     LINE_WEBHOOK_ENDPOINT, LINE_PUSH_ENDPOINT, LINE_REPLY_ENDPOINT,
     LINE_ADMIN_USER_ID, NOTIFY_USER_IDS
 )
@@ -79,6 +81,36 @@ def send_reply(reply_token, text, user_id=None):
     )
     if response.status_code != 200:
         logger.error("LINE API Error: %s %s", response.status_code, response.text)
+
+
+def clean_model_reply(text):
+    """Remove reasoning traces that some local reasoning models leak into content."""
+    if not text:
+        return ""
+
+    text = re.sub(r"(?is)<think>.*?</think>", "", text).strip()
+    draft_match = re.search(r"(?is)\*+\s*Draft\s+\d+\s*:\*+\s*(.*?)(?=\n\s*\*+\s*(?:Count|Critique|Wait)\b|\Z)", text)
+    if draft_match:
+        text = draft_match.group(1).strip()
+    text = re.sub(r"(?is)^Thinking Process:\s*.*?(?=\n\s*(?:答案|回答|建議|您|你|太太|老婆|胎位|可以|如果|請|目前|一般|資料來源|[-•*]?\s*\*\*)|\Z)", "", text).strip()
+
+    markers = [
+        "Final Answer:",
+        "Final answer:",
+        "Answer:",
+        "回答：",
+        "答案：",
+        "建議：",
+    ]
+    for marker in markers:
+        if marker in text:
+            text = text.split(marker, 1)[1].strip()
+
+    # If only an English reasoning fragment remains, avoid sending it to users.
+    if re.match(r"(?is)^[-* ]*(Role|Constraint|Content Focus|User Data|Conflict Resolution|Safety Check|Extract|Drafting|Refining|Analyze|Analysis|Need to|We need|The reference|Data Insufficient)\b", text):
+        return ""
+
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -178,12 +210,8 @@ def handle_event(event):
                 missing_fields.append(field)
 
     if missing_fields:
-        system_prompt = (
-            f"已知欄位：{first_line.strip()}。\n"
-            f"請從以下文字補充缺失欄位：{', '.join(missing_fields)}。\n"
-            f"{fields_system_prompt}\n"
-            f"{fields_examples}"
-        )
+        # Pass the strict zero-shot extraction prompt directly
+        system_prompt = fields_system_prompt
 
         # Call LLM to extract missing fields
         extracted_value = LLM_extract_from_text(user_text, system_prompt)
@@ -276,18 +304,29 @@ def handle_event(event):
         if finaljson is None:
             generated_text = no_data_reply
         else:
-            response = requests.post(
-                CHAT_ENDPOINT,
-                headers={"Content-Type": "application/json"},
-                json=finaljson,
-                timeout=120
-            )
-            lm_response = response.json()
-            msg = lm_response["choices"][0]["message"]
-            generated_text = (msg.get("content") or "").strip()
-            # Fallback for thinking/reasoning models
-            if not generated_text:
-                generated_text = (msg.get("reasoning_content") or "").strip()
+            if "prompt" in finaljson:
+                response = requests.post(
+                    COMPLETIONS_ENDPOINT,
+                    headers={"Content-Type": "application/json"},
+                    json=finaljson,
+                    timeout=120
+                )
+                lm_response = response.json()
+                generated_text = clean_model_reply((lm_response["choices"][0].get("text") or "").strip())
+            else:
+                response = requests.post(
+                    CHAT_ENDPOINT,
+                    headers={"Content-Type": "application/json"},
+                    json=finaljson,
+                    timeout=120
+                )
+                lm_response = response.json()
+                msg = lm_response["choices"][0]["message"]
+                generated_text = clean_model_reply((msg.get("content") or "").strip())
+                # Fallback for thinking/reasoning models
+                if not generated_text:
+                    generated_text = clean_model_reply((msg.get("reasoning_content") or "").strip())
+
             if not generated_text:
                 generated_text = "❌ 模型未產生回應，請稍後再試。"
             if source_summary:
@@ -366,8 +405,13 @@ def send_push(user_id, text):
 # Cloudflare Tunnel
 # ---------------------------------------------------------------------------
 def run_cloudflare_tunnel():
+    cloudflared_path = shutil.which("cloudflared")
+    if not cloudflared_path:
+        logger.error("cloudflared CLI not found. Install it or run CLI mode only.")
+        return None, None
+
     proc = subprocess.Popen(
-        ["cloudflared", "tunnel", "--url", "http://localhost:5000"],
+        [cloudflared_path, "tunnel", "--url", "http://localhost:5000"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True
@@ -615,7 +659,8 @@ if __name__ == "__main__":
             logger.info("🌐 public_url = %s", public_url)
             update_line_webhook(public_url)
         run_flask()
-        tunnel_proc.kill()
+        if tunnel_proc:
+            tunnel_proc.kill()
 
     elif mode == "3":
         public_url, tunnel_proc = run_cloudflare_tunnel()
@@ -631,7 +676,8 @@ if __name__ == "__main__":
         cli_thread.start()
         cli_thread.join()
 
-        tunnel_proc.kill()
+        if tunnel_proc:
+            tunnel_proc.kill()
 
     else:
         print("❌ 無效選項")

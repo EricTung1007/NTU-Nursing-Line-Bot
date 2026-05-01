@@ -9,7 +9,8 @@ def exe_dir():
 
 def run_cloudflare_tunnel_portable(port=5000, timeout_sec=25):
     base = exe_dir()
-    cloudflared_path = os.path.join(base, "cloudflared-windows-amd64.exe")
+    binary_name = "cloudflared-windows-amd64.exe" if os.name == "nt" else "cloudflared"
+    cloudflared_path = os.path.join(base, binary_name)
 
     if not os.path.exists(cloudflared_path):
         return None, None

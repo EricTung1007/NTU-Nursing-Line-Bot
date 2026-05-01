@@ -114,13 +114,38 @@ def build_augmented_prompt(
         • 歷史對話紀錄：{history_text}
         """
 
+    if "qwen" in modelname.lower():
+        prompt = (
+            "<|im_start|>system\n"
+            f"{system_message}\n"
+            "<|im_end|>\n"
+            "<|im_start|>user\n"
+            f"使用者問題：\n{user_question}\n"
+            "<|im_end|>\n"
+            "<|im_start|>assistant\n"
+            "<think>\n\n</think>\n\n"
+        )
+        return {
+            "model": modelname,
+            "prompt": prompt,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20,
+            "min_p": 0,
+            "presence_penalty": 1.5,
+            "max_tokens": 500,
+            "stop": ["<|im_end|>", "<|endoftext|>"],
+            "stream": False
+        }, source_summary
+
     return {
         "model": modelname,
         "messages": [
-            {"role": "user", "content": f"{system_message}\n\n使用者問題：\n{user_question}"}
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": f"使用者問題：\n{user_question}"}
         ],
         "temperature": 0.6,
-        "max_tokens": 1200,  # Reasoning models need headroom for thinking + answer
+        "max_tokens": 1200,
         "stream": False
     }, source_summary
 

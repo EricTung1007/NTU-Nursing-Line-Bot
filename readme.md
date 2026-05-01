@@ -43,10 +43,11 @@ LINE App ──▶ Cloudflare Tunnel ──▶ Flask /callback ──▶ handle_
 | `prep.py` | Knowledge base preparation (PDF → JSONL → FAISS) |
 | `product_entry.py` | PyInstaller entry point for packaged builds |
 | `start.bat` | One-click Windows launcher (starts LM Studio + bot) |
+| `start.command` | One-click macOS launcher (starts LM Studio + bot) |
 
 ## Prerequisites
 
-- **Python** 3.12+
+- **Python** 3.11+
 - **LM Studio** 0.3.x — load the following models:
   1. `text-embedding-bge-small-zh-v1.5` (embedding)
   2. A chat model of your choice (update `CHAT_MODEL` in `config.py`)
@@ -85,13 +86,22 @@ This converts PDFs → JSONL → FAISS vector index.
 
 ### 4. Run the bot
 
-**Option A — One-click (Windows):**
+**Option A — One-click (macOS):**
+
+```bash
+chmod +x start.command
+./start.command
+```
+
+If LM Studio installed the `lms` CLI somewhere other than `~/.lmstudio/bin/lms`, set `LMS_CLI_PATH` in `.env`.
+
+**Option B — One-click (Windows):**
 
 ```bash
 start.bat
 ```
 
-**Option B — Manual:**
+**Option C — Manual:**
 
 ```bash
 python LB.py

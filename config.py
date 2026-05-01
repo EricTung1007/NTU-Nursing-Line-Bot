@@ -1,5 +1,8 @@
 # config.py
 import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
 
 # ---------------------------------------------------------------------------
 # Load .env file (lightweight, no third-party dependency needed)
@@ -18,7 +21,7 @@ def _load_dotenv(path=".env"):
             if key:
                 os.environ.setdefault(key, value)
 
-_load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+_load_dotenv(BASE_DIR / ".env")
 
 # ---------------------------------------------------------------------------
 # LINE Bot Credentials  (loaded from .env — never hard-code secrets!)
@@ -45,6 +48,7 @@ ACTIVE_USER_IDS = [
 LM_STUDIO_HOST = os.environ.get("LM_STUDIO_HOST", "http://127.0.0.1:1234")
 EMBEDDING_ENDPOINT = f"{LM_STUDIO_HOST}/v1/embeddings"
 CHAT_ENDPOINT = f"{LM_STUDIO_HOST}/v1/chat/completions"
+COMPLETIONS_ENDPOINT = f"{LM_STUDIO_HOST}/v1/completions"
 MODELS_ENDPOINT = f"{LM_STUDIO_HOST}/v1/models"
 
 # LM Studio CLI path (for auto-loading models)
@@ -57,8 +61,8 @@ EMBEDDING_MODEL = "text-embedding-bge-small-zh-v1.5"
 
 # CHAT_MODEL = the API identifier (used in requests)
 # CHAT_MODEL_KEY = the model key or path for `lms load` (can differ from API name)
-CHAT_MODEL = "Qwen3.5-4B"
-CHAT_MODEL_KEY = "D:/Proj. Minerva's Den/models/lmstudio-community/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_M.gguf"
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "Qwen3.5-4B")
+CHAT_MODEL_KEY = os.environ.get("CHAT_MODEL_KEY", CHAT_MODEL)
 
 # ---------------------------------------------------------------------------
 # LINE API Endpoints
@@ -70,11 +74,11 @@ LINE_REPLY_ENDPOINT = "https://api.line.me/v2/bot/message/reply"
 # ---------------------------------------------------------------------------
 # FAISS Index & Data Storage
 # ---------------------------------------------------------------------------
-INDEX_PATH = "database/faiss_index.index"
-METADATA_PATH = "database/metadata.json"
-JSONL_PATH = "database/combined.jsonl"
+INDEX_PATH = str(BASE_DIR / "database" / "faiss_index.index")
+METADATA_PATH = str(BASE_DIR / "database" / "metadata.json")
+JSONL_PATH = str(BASE_DIR / "database" / "combined.jsonl")
 
 # ---------------------------------------------------------------------------
 # User Memory Files
 # ---------------------------------------------------------------------------
-MEMORY_FOLDER = "memory_data"
+MEMORY_FOLDER = str(BASE_DIR / "memory_data")

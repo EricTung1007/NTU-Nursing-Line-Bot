@@ -5,7 +5,7 @@ import logging
 import requests
 
 
-from config import MEMORY_FOLDER, CHAT_ENDPOINT, CHAT_MODEL
+from config import MEMORY_FOLDER, COMPLETIONS_ENDPOINT, CHAT_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -128,64 +128,76 @@ def update_memory_name(user_id, name_value):
         f.writelines(lines)
 
 
+def _extract_structured_profile(text):
+    match = re.search(
+        r"G\(\d*\)\s*P\(\d*\)\s*W\(\d*\)\s*IsDad\((?:True|False|1|0)?\)\s*Name\([^)]*\)",
+        text
+    )
+    return re.sub(r"\s+", "", match.group(0)) if match else None
+
+
+def _call_profile_extractor(text, system_prompt, max_tokens):
+    prompt = (
+        "<|im_start|>system\n"
+        f"{system_prompt}\n"
+        "<|im_end|>\n"
+        "<|im_start|>user\n"
+        f"{text}\n"
+        "<|im_end|>\n"
+        "<|im_start|>assistant\n"
+        "<think>\n\n</think>\n\n"
+    )
+    lm_payload = {
+        "model": CHAT_MODEL,
+        "prompt": prompt,
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 1.5,
+        "max_tokens": max_tokens,
+        "stop": ["<|im_end|>", "<|endoftext|>"],
+        "stream": False
+    }
+
+    response = requests.post(
+        COMPLETIONS_ENDPOINT,
+        headers={"Content-Type": "application/json"},
+        json=lm_payload,
+        timeout=30
+    )
+    response.raise_for_status()
+    result = response.json()
+    choice = result["choices"][0]
+
+    content = (choice.get("text") or "").strip()
+    structured = _extract_structured_profile(content)
+    if structured:
+        return structured
+
+    logger.warning(
+        "LLM extraction produced no complete profile. finish_reason=%s text=%r",
+        choice.get("finish_reason"),
+        content[:200]
+    )
+    return None
+
+
 def LLM_extract_from_text(text, system_prompt):
     """
     使用 LLM 提取單一欄位，並檢查格式合法性
     Supports both regular and thinking/reasoning models (e.g. gemma-4).
     """
     try:
-        lm_payload = {
-            "model": CHAT_MODEL,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text}
-            ],
-            "temperature": 0.1,
-            "max_tokens": 300,  # Reasoning models need headroom for thinking + answer
-            "stream": False
-        }
-
-        response = requests.post(
-            CHAT_ENDPOINT,
-            headers={"Content-Type": "application/json"},
-            json=lm_payload,
-            timeout=30
-        )
-        result = response.json()
-        msg = result["choices"][0]["message"]
-
-        # Get content — thinking models may put output in reasoning_content
-        content = (msg.get("content") or "").strip()
-        if not content:
-            # Fallback: extract from reasoning_content for thinking models
-            reasoning = (msg.get("reasoning_content") or "").strip()
-            if reasoning:
-                # Try to find the structured output within the reasoning text
-                field_match = re.search(
-                    r"(G\(\d*\)\s*P\(\d*\)\s*W\(\d*\)\s*IsDad\([^)]*\)\s*Name\([^)]*\))",
-                    reasoning
-                )
-                if field_match:
-                    content = field_match.group(1)
-                else:
-                    # Try to find any individual field patterns
-                    parts = []
-                    for pat in [r"G\(\d+\)\s*P\(\d+\)", r"W\(\d+\)", r"IsDad\((True|False|1|0)\)", r"Name\([^)]+\)"]:
-                        m = re.search(pat, reasoning)
-                        if m:
-                            parts.append(m.group(0))
-                    content = "".join(parts) if parts else ""
-
-        if not content:
-            logger.debug("LLM returned empty content and no usable reasoning")
-            return None
-
-        # Check format validity
-        if not re.search(r"(G\(\d+\)\s*P\(\d+\))?|W\(\d+\)|IsDad\((True|False|1|0)\)|Name\(.+\)", content):
-            logger.warning("LLM 回傳格式錯誤: %s", content)
-            return None
-
-        return content
+        for max_tokens in (80, 200):
+            try:
+                extracted = _call_profile_extractor(text, system_prompt, max_tokens=max_tokens)
+            except Exception as attempt_err:
+                logger.warning("LLM extraction attempt failed at max_tokens=%s: %s", max_tokens, attempt_err)
+                continue
+            if extracted:
+                return extracted
+        return None
 
     except Exception as e:
         logger.debug("LLM Studio 提取失敗: %s", e)

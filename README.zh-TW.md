@@ -43,10 +43,11 @@ LINE App ──▶ Cloudflare Tunnel ──▶ Flask /callback ──▶ handle_
 | `prep.py` | 知識庫建置（PDF → JSONL → FAISS） |
 | `product_entry.py` | PyInstaller 打包進入點 |
 | `start.bat` | Windows 一鍵啟動（啟動 LM Studio + Bot） |
+| `start.command` | macOS 一鍵啟動（啟動 LM Studio + Bot） |
 
 ## 前置需求
 
-- **Python** 3.12+
+- **Python** 3.11+
 - **LM Studio** 0.3.x — 載入以下模型：
   1. `text-embedding-bge-small-zh-v1.5`（嵌入模型）
   2. 您選擇的對話模型（在 `config.py` 中更新 `CHAT_MODEL`）
@@ -85,13 +86,22 @@ python prep.py
 
 ### 4. 啟動 Bot
 
-**方法 A — 一鍵啟動（Windows）：**
+**方法 A — 一鍵啟動（macOS）：**
+
+```bash
+chmod +x start.command
+./start.command
+```
+
+若 LM Studio 的 `lms` CLI 不在 `~/.lmstudio/bin/lms`，請在 `.env` 設定 `LMS_CLI_PATH`。
+
+**方法 B — 一鍵啟動（Windows）：**
 
 ```bash
 start.bat
 ```
 
-**方法 B — 手動啟動：**
+**方法 C — 手動啟動：**
 
 ```bash
 python LB.py
