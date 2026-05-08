@@ -32,9 +32,9 @@ def run_cloudflare_tunnel_portable(port=5000, timeout_sec=25):
         m = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", line)
         if m:
             candidate = m.group(0)
-            if candidate != "https://api.trycloudflare.com":
+            if "api.trycloudflare.com" not in candidate:
                 public_url = candidate
-            break
+                break
 
     return public_url, proc
 

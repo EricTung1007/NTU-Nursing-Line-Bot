@@ -407,11 +407,15 @@ def send_push(user_id, text):
 def run_cloudflare_tunnel():
     cloudflared_path = shutil.which("cloudflared")
     if not cloudflared_path:
-        logger.error("cloudflared CLI not found. Install it or run CLI mode only.")
-        return None, None
+        local_path = os.path.join(os.path.dirname(__file__), "cloudflared")
+        if os.path.exists(local_path):
+            cloudflared_path = local_path
+        else:
+            logger.error("cloudflared CLI not found. Install it or run CLI mode only.")
+            return None, None
 
     proc = subprocess.Popen(
-        [cloudflared_path, "tunnel", "--url", "http://localhost:5000"],
+        [cloudflared_path, "tunnel", "--url", "http://127.0.0.1:5001"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True
@@ -425,8 +429,10 @@ def run_cloudflare_tunnel():
             break
         match = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", line)
         if match:
-            public_url = match.group(0)
-            break
+            candidate = match.group(0)
+            if "api.trycloudflare.com" not in candidate:
+                public_url = candidate
+                break
 
     if not public_url:
         logger.error("無法取得 Cloudflare 公網網址！")
@@ -435,23 +441,29 @@ def run_cloudflare_tunnel():
 
 
 def update_line_webhook(public_url):
-    time.sleep(5)
     endpoint = f"{public_url}/callback"
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
     payload = {"endpoint": endpoint}
-    try:
-        r = requests.put(
-            LINE_WEBHOOK_ENDPOINT,
-            headers=headers,
-            data=json.dumps(payload),
-            timeout=15
-        )
-        logger.info("Webhook 更新: %s %s", r.status_code, r.text)
-    except Exception as e:
-        logger.error("Webhook 更新失敗: %s", e)
+    
+    for attempt in range(1, 7):
+        time.sleep(5)
+        try:
+            r = requests.put(
+                LINE_WEBHOOK_ENDPOINT,
+                headers=headers,
+                data=json.dumps(payload),
+                timeout=15
+            )
+            if r.status_code == 200:
+                logger.info("Webhook 更新成功: %s", r.text)
+                break
+            else:
+                logger.warning("Webhook 更新失敗 (嘗試 %d/6): %s %s", attempt, r.status_code, r.text)
+        except Exception as e:
+            logger.error("Webhook 更新發生錯誤 (嘗試 %d/6): %s", attempt, e)
 
 
 # ---------------------------------------------------------------------------
@@ -461,7 +473,7 @@ def run_flask():
     for notify_user_id in NOTIFY_USER_IDS:
         send_push(notify_user_id, f"[後臺訊息]LINE Bot 已啟動（{datetime.now()})")
 
-    app.run(host="0.0.0.0", port=5000, threaded=True)
+    app.run(host="0.0.0.0", port=5001, threaded=True)
 
 
 # ---------------------------------------------------------------------------
@@ -657,7 +669,7 @@ if __name__ == "__main__":
         public_url, tunnel_proc = run_cloudflare_tunnel()
         if public_url:
             logger.info("🌐 public_url = %s", public_url)
-            update_line_webhook(public_url)
+            threading.Thread(target=update_line_webhook, args=(public_url,), daemon=True).start()
         run_flask()
         if tunnel_proc:
             tunnel_proc.kill()
@@ -665,7 +677,7 @@ if __name__ == "__main__":
     elif mode == "3":
         public_url, tunnel_proc = run_cloudflare_tunnel()
         if public_url:
-            update_line_webhook(public_url)
+            threading.Thread(target=update_line_webhook, args=(public_url,), daemon=True).start()
 
         flask_thread = threading.Thread(target=run_flask)
         flask_thread.daemon = True
