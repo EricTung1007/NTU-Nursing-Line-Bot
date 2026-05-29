@@ -21,7 +21,7 @@ from prompts import fields_examples, fields_system_prompt, greet_message, no_dat
 from RAG_module import query_with_context, build_augmented_prompt
 from memory_module import (
     append_to_memory, read_memory, update_memory_gp, get_memory_file_path,
-    LLM_extract_from_text, update_memory_weeks, update_memory_isdad, update_memory_name
+    LLM_extract_from_text, mark_memory_failed, update_memory_weeks, update_memory_isdad, update_memory_name
 )
 from config import (
     CHAT_ENDPOINT, CHAT_MODEL, CHANNEL_ACCESS_TOKEN, CHANNEL_SECRET,
@@ -39,6 +39,20 @@ logger = logging.getLogger("LB")
 app = Flask(__name__)
 _last_webhook_post_at = None
 
+EMERGENCY_REPLY = (
+    "您描述的狀況可能需要立即處理，請立刻聯絡醫院或直接就醫。\n"
+    "台大醫院總機：(02) 2312-3456\n"
+    "產房分機：270908、270909\n"
+    "若有大量出血、劇烈腹痛、破水、胎動明顯減少或停止、昏倒、抽搐、呼吸困難、胸痛，請不要等待 LINE 回覆，請立即撥打醫院電話或 119。"
+)
+
+EMERGENCY_KEYWORDS = (
+    "大量出血", "一直流血", "血流不停", "劇烈腹痛", "很痛", "痛到受不了",
+    "規則宮縮", "破水", "羊水", "胎動變少", "胎動減少", "沒有胎動", "胎動停止",
+    "昏倒", "暈倒", "抽搐", "呼吸困難", "喘不過氣", "胸痛", "嚴重頭痛",
+    "視力模糊", "高燒", "發燒不退", "意識不清", "想吐又頭痛"
+)
+
 # Silence Flask/Werkzeug request logs by default
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
@@ -53,6 +67,10 @@ def diag_warn(message):
 
 def diag_error(message):
     logger.error("[DIAG] %s", message)
+
+
+def is_emergency_message(text):
+    return any(keyword in text for keyword in EMERGENCY_KEYWORDS)
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +224,11 @@ def handle_event(event):
     # --- Save message to memory ---
     append_to_memory(user_id, f"User: {user_text}")
 
+    if is_emergency_message(user_text):
+        diag_warn("Emergency-like LINE message detected. Sending hospital phone guidance without waiting for RAG.")
+        send_reply(reply_token, EMERGENCY_REPLY, user_id)
+        return "OK"
+
     # --- Read user profile (first line of memory file) ---
     memory_content = read_memory(user_id)
     first_line = memory_content.splitlines()[0] if memory_content else ""
@@ -335,6 +358,7 @@ def handle_event(event):
         )
 
         if finaljson is None:
+            mark_memory_failed(user_id)
             generated_text = no_data_reply
         else:
             if "prompt" in finaljson:
@@ -361,11 +385,13 @@ def handle_event(event):
                     generated_text = clean_model_reply((msg.get("reasoning_content") or "").strip())
 
             if not generated_text:
+                mark_memory_failed(user_id)
                 generated_text = "❌ 模型未產生回應，請稍後再試。"
             if source_summary:
                 generated_text += f"\n資料來源: {source_summary}"
 
     except Exception as e:
+        mark_memory_failed(user_id)
         logger.error("LM Studio request error: %s", e)
         diag_error(
             "LM Studio/RAG failed after a LINE message was received. Run TEST_LM_STUDIO.bat and confirm "

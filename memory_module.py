@@ -3,6 +3,7 @@ import os
 import re
 import logging
 import requests
+from datetime import datetime
 
 
 from config import MEMORY_FOLDER, COMPLETIONS_ENDPOINT, CHAT_MODEL
@@ -28,14 +29,45 @@ def create_memory_file(user_id):
     file_path = get_memory_file_path(user_id)
     if not os.path.exists(file_path):
         with open(file_path, "w", encoding="utf-8") as f:
-            f.write("G()P()W()IsDad()Name()\n")
+            f.write("G()P()W()IsDad()Name()failed(False)\n")
     return file_path
+
+
+def _ensure_failed_marker(file_path):
+    if not os.path.exists(file_path):
+        return
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    if not lines:
+        lines = ["G()P()W()IsDad()Name()failed(False)\n"]
+    elif "failed(" not in lines[0].lower():
+        lines[0] = lines[0].rstrip("\n") + "failed(False)\n"
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+def mark_memory_failed(user_id):
+    file_path = create_memory_file(user_id)
+    _ensure_failed_marker(file_path)
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    if lines:
+        lines[0] = re.sub(r"failed\((True|False)?\)", "failed(True)", lines[0], flags=re.IGNORECASE)
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
 
 def append_to_memory(user_id, content):
     """
     將新內容加入記憶檔案
     """
     file_path = create_memory_file(user_id)
+    _ensure_failed_marker(file_path)
     with open(file_path, "a", encoding="utf-8") as f:
         f.write(content + "\n")
 
@@ -45,6 +77,7 @@ def read_memory(user_id):
     """
     file_path = get_memory_file_path(user_id)
     if os.path.exists(file_path):
+        _ensure_failed_marker(file_path)
         with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
     return ""
@@ -136,6 +169,74 @@ def _extract_structured_profile(text):
     return re.sub(r"\s+", "", match.group(0)) if match else None
 
 
+def _line_field(text, field_name):
+    match = re.search(rf"(?im)^\s*(?:\d+\s*[.)、．]?\s*)?{field_name}\s*[:：]\s*(.+?)\s*$", text)
+    return match.group(1).strip() if match else ""
+
+
+def _first_number(text):
+    match = re.search(r"\d+", text or "")
+    return match.group(0) if match else ""
+
+
+def _gender_to_isdad(gender_text):
+    value = (gender_text or "").strip().lower()
+    if not value:
+        return ""
+    if any(token in value for token in ("父", "爸爸", "先生", "男", "male", "father", "dad")):
+        return "True"
+    if any(token in value for token in ("母", "媽媽", "媽咪", "孕婦", "產婦", "女", "female", "mother", "mom")):
+        return "False"
+    return ""
+
+
+def _parse_due_date(text):
+    value = _line_field(text, "預產期")
+    if not value:
+        return None
+
+    match = re.search(r"(\d{2,4})\s*[年/\-.]\s*(\d{1,2})\s*[月/\-.]\s*(\d{1,2})", value)
+    if not match:
+        return None
+
+    year, month, day = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    if 100 <= year < 200:
+        year += 1911
+
+    try:
+        return datetime(year, month, day).date()
+    except ValueError:
+        return None
+
+
+def _weeks_from_due_date(text):
+    due_date = _parse_due_date(text)
+    if not due_date:
+        return ""
+
+    today = datetime.now().date()
+    gestational_days = 280 - (due_date - today).days
+    if gestational_days < 0 or gestational_days > 315:
+        return ""
+    return str(max(0, gestational_days // 7))
+
+
+def _extract_profile_from_form(text):
+    name = _line_field(text, "姓名")
+    gender = _line_field(text, "性別")
+    gravida = _first_number(_line_field(text, "懷孕次數"))
+    parity = _first_number(_line_field(text, "生產次數"))
+    weeks = _first_number(_line_field(text, "懷孕週數") or _line_field(text, "週數"))
+    if not weeks:
+        weeks = _weeks_from_due_date(text)
+    isdad = _gender_to_isdad(gender)
+
+    if not any((name, gender, gravida, parity, weeks, isdad)):
+        return None
+
+    return f"G({gravida})P({parity})W({weeks})IsDad({isdad})Name({name})"
+
+
 def _call_profile_extractor(text, system_prompt, max_tokens):
     prompt = (
         "<|im_start|>system\n"
@@ -189,6 +290,10 @@ def LLM_extract_from_text(text, system_prompt):
     Supports both regular and thinking/reasoning models (e.g. gemma-4).
     """
     try:
+        form_profile = _extract_profile_from_form(text)
+        if form_profile:
+            return form_profile
+
         for max_tokens in (80, 200):
             try:
                 extracted = _call_profile_extractor(text, system_prompt, max_tokens=max_tokens)
