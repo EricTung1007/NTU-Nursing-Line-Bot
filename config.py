@@ -1,8 +1,16 @@
 # config.py
 import os
+import sys
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent
+if getattr(sys, "frozen", False):
+    APP_DIR = Path(sys.executable).resolve().parent
+    RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", APP_DIR)).resolve()
+else:
+    APP_DIR = Path(__file__).resolve().parent
+    RESOURCE_DIR = APP_DIR
+
+BASE_DIR = APP_DIR
 
 # ---------------------------------------------------------------------------
 # Load .env file (lightweight, no third-party dependency needed)
@@ -21,7 +29,7 @@ def _load_dotenv(path=".env"):
             if key:
                 os.environ.setdefault(key, value)
 
-_load_dotenv(BASE_DIR / ".env")
+_load_dotenv(APP_DIR / ".env")
 
 # ---------------------------------------------------------------------------
 # LINE Bot Credentials  (loaded from .env — never hard-code secrets!)
@@ -55,9 +63,11 @@ MODELS_ENDPOINT = f"{LM_STUDIO_HOST}/v1/models"
 _default_lms = os.path.join(os.path.expanduser("~"), ".lmstudio", "bin",
                             "lms.exe" if os.name == "nt" else "lms")
 LMS_CLI_PATH = os.environ.get("LMS_CLI_PATH", _default_lms)
+LM_STUDIO_AUTO_START = os.environ.get("LM_STUDIO_AUTO_START", "true").lower() in ("1", "true", "yes", "on")
+LM_STUDIO_AUTO_LOAD_MODELS = os.environ.get("LM_STUDIO_AUTO_LOAD_MODELS", "true").lower() in ("1", "true", "yes", "on")
 
 # LM Model Names (change to match models loaded in LM Studio)
-EMBEDDING_MODEL = "text-embedding-bge-small-zh-v1.5"
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-bge-small-zh-v1.5")
 
 # CHAT_MODEL = the API identifier (used in requests)
 # CHAT_MODEL_KEY = the model key or path for `lms load` (can differ from API name)
@@ -68,17 +78,18 @@ CHAT_MODEL_KEY = os.environ.get("CHAT_MODEL_KEY", CHAT_MODEL)
 # LINE API Endpoints
 # ---------------------------------------------------------------------------
 LINE_WEBHOOK_ENDPOINT = "https://api.line.me/v2/bot/channel/webhook/endpoint"
+LINE_WEBHOOK_TEST_ENDPOINT = "https://api.line.me/v2/bot/channel/webhook/test"
 LINE_PUSH_ENDPOINT = "https://api.line.me/v2/bot/message/push"
 LINE_REPLY_ENDPOINT = "https://api.line.me/v2/bot/message/reply"
 
 # ---------------------------------------------------------------------------
 # FAISS Index & Data Storage
 # ---------------------------------------------------------------------------
-INDEX_PATH = str(BASE_DIR / "database" / "faiss_index.index")
-METADATA_PATH = str(BASE_DIR / "database" / "metadata.json")
-JSONL_PATH = str(BASE_DIR / "database" / "combined.jsonl")
+INDEX_PATH = str(RESOURCE_DIR / "database" / "faiss_index.index")
+METADATA_PATH = str(RESOURCE_DIR / "database" / "metadata.json")
+JSONL_PATH = str(RESOURCE_DIR / "database" / "combined.jsonl")
 
 # ---------------------------------------------------------------------------
 # User Memory Files
 # ---------------------------------------------------------------------------
-MEMORY_FOLDER = str(BASE_DIR / "memory_data")
+MEMORY_FOLDER = str(APP_DIR / "memory_data")

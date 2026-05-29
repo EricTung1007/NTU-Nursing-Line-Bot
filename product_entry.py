@@ -1,61 +1,80 @@
-# product_entry.py
-import os, sys, re, time, subprocess
+import logging
+import os
+import sys
+import threading
+import time
+
 import LB
 
-def exe_dir():
+
+def app_dir():
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
 
-def run_cloudflare_tunnel_portable(port=5000, timeout_sec=25):
-    base = exe_dir()
-    binary_name = "cloudflared-windows-amd64.exe" if os.name == "nt" else "cloudflared"
-    cloudflared_path = os.path.join(base, binary_name)
 
-    if not os.path.exists(cloudflared_path):
-        return None, None
-
-    proc = subprocess.Popen(
-        [cloudflared_path, "tunnel", "--url", f"http://localhost:{port}"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+def configure_logging():
+    log_level = logging.DEBUG if "--verbose" in sys.argv else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
     )
 
-    public_url = None
-    deadline = time.time() + timeout_sec
 
-    while time.time() < deadline:
-        raw = proc.stdout.readline()
-        if not raw:
-            continue
-        line = raw.decode("utf-8", errors="ignore")
-        m = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", line)
-        if m:
-            candidate = m.group(0)
-            if "api.trycloudflare.com" not in candidate:
-                public_url = candidate
-                break
+def choose_mode():
+    args = [arg for arg in sys.argv[1:] if arg != "--verbose"]
+    if args:
+        return args[0].strip().lower()
 
-    return public_url, proc
+    print("請選擇模式：")
+    print("1. CLI 測試")
+    print("2. Flask webhook + Cloudflare tunnel")
+    print("3. Both")
+    return input("> ").strip().lower()
+
 
 def main():
-    print("請選擇模式：")
-    print("1. CLI")
-    print("2. Flask")
-    print("3. Both")
+    os.chdir(app_dir())
+    configure_logging()
+    LB.startup_check()
 
-    mode = input("> ").strip()
+    mode = choose_mode()
+    if mode in ("1", "cli"):
+        LB.run_cli()
+        return
 
-    if mode == "1":
-        LB.run_cli()
-    elif mode == "2":
-        LB.run_flask()
-    elif mode == "3":
-        LB.run_cli()
-        LB.run_flask()
-    else:
-        print("無效選項")
+    if mode in ("2", "flask", "webhook"):
+        public_url, tunnel_proc = LB.run_cloudflare_tunnel()
+        if public_url:
+            logging.getLogger("LB").info("Public URL: %s", public_url)
+            threading.Thread(target=LB.update_line_webhook, args=(public_url,), daemon=True).start()
+        try:
+            LB.run_flask()
+        finally:
+            if tunnel_proc:
+                tunnel_proc.kill()
+        return
+
+    if mode in ("3", "both"):
+        public_url, tunnel_proc = LB.run_cloudflare_tunnel()
+        if public_url:
+            logging.getLogger("LB").info("Public URL: %s", public_url)
+            threading.Thread(target=LB.update_line_webhook, args=(public_url,), daemon=True).start()
+
+        flask_thread = threading.Thread(target=LB.run_flask, daemon=True)
+        flask_thread.start()
+        time.sleep(1)
+
+        try:
+            LB.run_cli()
+        finally:
+            if tunnel_proc:
+                tunnel_proc.kill()
+        return
+
+    print("無效選項，請輸入 1、2 或 3。")
+
 
 if __name__ == "__main__":
-    os.chdir(exe_dir())
     main()

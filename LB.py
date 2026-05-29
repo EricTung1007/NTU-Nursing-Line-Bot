@@ -25,8 +25,9 @@ from memory_module import (
 )
 from config import (
     CHAT_ENDPOINT, CHAT_MODEL, CHANNEL_ACCESS_TOKEN, CHANNEL_SECRET,
+    EMBEDDING_MODEL,
     COMPLETIONS_ENDPOINT,
-    LINE_WEBHOOK_ENDPOINT, LINE_PUSH_ENDPOINT, LINE_REPLY_ENDPOINT,
+    LINE_WEBHOOK_ENDPOINT, LINE_WEBHOOK_TEST_ENDPOINT, LINE_PUSH_ENDPOINT, LINE_REPLY_ENDPOINT,
     LINE_ADMIN_USER_ID, NOTIFY_USER_IDS
 )
 
@@ -36,9 +37,22 @@ from config import (
 logger = logging.getLogger("LB")
 
 app = Flask(__name__)
+_last_webhook_post_at = None
 
 # Silence Flask/Werkzeug request logs by default
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
+
+
+def diag_ok(message):
+    logger.info("[DIAG OK] %s", message)
+
+
+def diag_warn(message):
+    logger.warning("[DIAG] %s", message)
+
+
+def diag_error(message):
+    logger.error("[DIAG] %s", message)
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +95,10 @@ def send_reply(reply_token, text, user_id=None):
     )
     if response.status_code != 200:
         logger.error("LINE API Error: %s %s", response.status_code, response.text)
+        diag_error(
+            "Reply to LINE failed. The webhook reached this bot, but LINE rejected the reply. "
+            "Check channel access token, channel mismatch, and whether the reply token expired."
+        )
 
 
 def clean_model_reply(text):
@@ -117,12 +135,27 @@ def clean_model_reply(text):
 # Core event handler
 # ---------------------------------------------------------------------------
 def handle_event(event):
+    event_type = event.get("type")
+    source = event.get("source", {})
+    message = event.get("message", {})
+    user_id_for_log = source.get("userId", "unknown")
+    logger.info(
+        "LINE event received: type=%s user=%s message_type=%s",
+        event_type,
+        user_id_for_log,
+        message.get("type", "-"),
+    )
+
     if not (event.get("type") == "message" and event["message"].get("type") == "text"):
+        logger.info("LINE event ignored: unsupported event/message type")
+        diag_warn("LINE event reached the bot but was ignored because it was not a text message.")
         return
 
     user_id = event["source"]["userId"]
     user_text = event["message"]["text"]
     reply_token = event["replyToken"]
+    logger.info("LINE text from %s: %s", user_id, user_text)
+    diag_ok("LINE text message reached the bot; forwarding it through memory/RAG/LM Studio.")
 
     # --- Correction commands (更正) ---
     if user_text.startswith("更正"):
@@ -334,6 +367,10 @@ def handle_event(event):
 
     except Exception as e:
         logger.error("LM Studio request error: %s", e)
+        diag_error(
+            "LM Studio/RAG failed after a LINE message was received. Run TEST_LM_STUDIO.bat and confirm "
+            "both embedding and chat endpoint tests pass."
+        )
 
         if finaljson is not None:
             logger.debug("CHAT_ENDPOINT=%s", CHAT_ENDPOINT)
@@ -352,6 +389,10 @@ def handle_event(event):
                 generated_text = lm_response["choices"][0]["message"]["content"].strip()
             except Exception as retry_err:
                 logger.error("LM Studio retry also failed: %s", repr(retry_err))
+                diag_error(
+                    "LM Studio retry failed too. Most likely causes: LM Studio server stopped, model unloaded, "
+                    "CHAT_MODEL/EMBEDDING_MODEL mismatch, or request timeout."
+                )
                 generated_text = "❌ 抱歉，目前無法取得回應，請稍後再試。"
         else:
             generated_text = "❌ 抱歉，目前無法取得回應，請稍後再試。"
@@ -363,18 +404,52 @@ def handle_event(event):
 # ---------------------------------------------------------------------------
 # Flask webhook route
 # ---------------------------------------------------------------------------
+@app.route("/", methods=["GET"])
+def health_root():
+    return "NTU Nursing LINE Bot is running"
+
+
+@app.route("/callback", methods=["GET"])
+def callback_health():
+    return "LINE webhook endpoint is running. LINE sends POST requests here."
+
+
 @app.route("/callback", methods=["POST"])
 def callback():
+    global _last_webhook_post_at
     signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
+    _last_webhook_post_at = time.time()
+    logger.info(
+        "Webhook POST received: remote=%s bytes=%d signature_present=%s",
+        request.remote_addr,
+        len(body.encode("utf-8")),
+        bool(signature),
+    )
 
     if not validate_signature(body, signature):
-        logger.error("Invalid signature")
+        logger.error(
+            "Invalid LINE signature. Check LINE_CHANNEL_SECRET and make sure you are messaging the same LINE channel as this .env."
+        )
+        diag_error(
+            "LINE reached this bot, but signature validation failed. Most likely: LINE_CHANNEL_SECRET is wrong "
+            "or you are messaging a different LINE bot/channel than the one in .env."
+        )
         abort(400)
 
-    data = json.loads(body)
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        logger.exception("Webhook body is not valid JSON: %s", body[:500])
+        diag_error("LINE reached this bot, but the webhook body was not valid JSON.")
+        abort(400)
 
-    for event in data.get("events", []):
+    events = data.get("events", [])
+    logger.info("Webhook signature OK; events=%d", len(events))
+    diag_ok("LINE webhook reached this bot and signature validation passed.")
+    if not events:
+        diag_warn("LINE webhook POST had zero events. This is often a LINE verify/test request, not a user message.")
+    for event in events:
         handle_event(event)
     return "OK"
 
@@ -407,12 +482,37 @@ def send_push(user_id, text):
 def run_cloudflare_tunnel():
     cloudflared_path = shutil.which("cloudflared")
     if not cloudflared_path:
-        local_path = os.path.join(os.path.dirname(__file__), "cloudflared")
-        if os.path.exists(local_path):
-            cloudflared_path = local_path
-        else:
-            logger.error("cloudflared CLI not found. Install it or run CLI mode only.")
-            return None, None
+        try:
+            from config import APP_DIR, RESOURCE_DIR
+            configured_dirs = [str(APP_DIR), str(RESOURCE_DIR)]
+        except ImportError:
+            configured_dirs = []
+
+        search_dirs = [
+            *configured_dirs,
+            os.path.dirname(__file__),
+            os.getcwd(),
+            os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else "",
+        ]
+        local_names = [
+            "cloudflared",
+            "cloudflared.exe",
+            "cloudflared-windows-amd64.exe",
+        ]
+        for base_dir in search_dirs:
+            if not base_dir:
+                continue
+            for name in local_names:
+                local_path = os.path.join(base_dir, name)
+                if os.path.exists(local_path):
+                    cloudflared_path = local_path
+                    break
+            if cloudflared_path:
+                break
+
+    if not cloudflared_path:
+        logger.error("cloudflared CLI not found. Install it or run CLI mode only.")
+        return None, None
 
     proc = subprocess.Popen(
         [cloudflared_path, "tunnel", "--url", "http://127.0.0.1:5001"],
@@ -469,20 +569,130 @@ def update_line_webhook(public_url):
 # ---------------------------------------------------------------------------
 # Flask runner
 # ---------------------------------------------------------------------------
+def check_line_webhook_endpoint(headers):
+    try:
+        r = requests.get(LINE_WEBHOOK_ENDPOINT, headers=headers, timeout=15)
+        if r.status_code == 200:
+            logger.info("Current LINE webhook setting: %s", r.text)
+            diag_ok("Read LINE webhook setting successfully. Confirm this endpoint matches the Cloudflare URL printed above.")
+        else:
+            logger.warning("Could not read LINE webhook setting: %s %s", r.status_code, r.text)
+            diag_warn("Could not read LINE webhook setting. Check channel access token permissions.")
+    except Exception as e:
+        logger.warning("Could not read LINE webhook setting: %s", e)
+        diag_warn("Could not read LINE webhook setting. Network or LINE API access may be blocked.")
+
+
+def test_line_webhook_endpoint(headers, endpoint):
+    payload = {"endpoint": endpoint}
+    for attempt in range(1, 7):
+        time.sleep(2)
+        try:
+            r = requests.post(
+                LINE_WEBHOOK_TEST_ENDPOINT,
+                headers=headers,
+                data=json.dumps(payload),
+                timeout=15,
+            )
+            if r.status_code == 200:
+                logger.info("LINE webhook test result: %s", r.text)
+                diag_ok("LINE webhook test API passed. If user messages still do not arrive, check that you are chatting with this exact LINE bot.")
+                return True
+
+            logger.warning(
+                "LINE webhook test failed (attempt %d/6): %s %s",
+                attempt,
+                r.status_code,
+                r.text,
+            )
+            diag_warn(
+                "LINE webhook test failed. Most likely: Cloudflare URL is not reachable yet, /callback is not reachable, "
+                "or LINE rejected the temporary tunnel URL. The bot will retry."
+            )
+        except Exception as e:
+            logger.warning("LINE webhook test error (attempt %d/6): %s", attempt, e)
+            diag_warn("LINE webhook test could not contact LINE or the tunnel. Check internet/firewall/Cloudflare tunnel.")
+
+    logger.error("LINE webhook test did not pass. Messages from LINE may not reach this bot.")
+    diag_error("Webhook update may be saved, but LINE cannot verify delivery. User messages probably will not reach LM Studio.")
+    return False
+
+
+def update_line_webhook(public_url):
+    endpoint = f"{public_url}/callback"
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {"endpoint": endpoint}
+
+    for attempt in range(1, 7):
+        time.sleep(5)
+        try:
+            r = requests.put(
+                LINE_WEBHOOK_ENDPOINT,
+                headers=headers,
+                data=json.dumps(payload),
+                timeout=15,
+            )
+            if r.status_code == 200:
+                logger.info("Webhook updated successfully: %s", r.text)
+                diag_ok("LINE webhook endpoint was updated to the current Cloudflare /callback URL.")
+                check_line_webhook_endpoint(headers)
+                test_line_webhook_endpoint(headers, endpoint)
+                return
+
+            logger.warning("Webhook update failed (attempt %d/6): %s %s", attempt, r.status_code, r.text)
+            diag_warn(
+                "LINE rejected the webhook endpoint update. Check LINE token, Cloudflare URL format, and whether the tunnel is ready."
+            )
+        except Exception as e:
+            logger.error("Webhook update error (attempt %d/6): %s", attempt, e)
+            diag_warn("Webhook update request failed. Check network access to LINE API.")
+
+
 def run_flask():
     for notify_user_id in NOTIFY_USER_IDS:
         send_push(notify_user_id, f"[後臺訊息]LINE Bot 已啟動（{datetime.now()})")
 
+    threading.Thread(target=webhook_inactivity_watchdog, daemon=True).start()
     app.run(host="0.0.0.0", port=5001, threaded=True)
+
+
+def webhook_inactivity_watchdog():
+    time.sleep(90)
+    if _last_webhook_post_at is None:
+        diag_warn(
+            "No LINE webhook POST has reached this bot in the first 90 seconds. "
+            "If you already sent a LINE message, likely causes are: wrong webhook URL in LINE console, "
+            "messaging a different bot, Cloudflare tunnel not reachable, or LINE webhook delivery disabled."
+        )
 
 
 # ---------------------------------------------------------------------------
 # CLI mode
 # ---------------------------------------------------------------------------
+def print_model_usage(loaded_models=None):
+    loaded_models = loaded_models or []
+    chat_match = _match_loaded_model(CHAT_MODEL, loaded_models)
+    embedding_match = _match_loaded_model(EMBEDDING_MODEL, loaded_models)
+
+    print("")
+    print("Model configuration:")
+    print(f"  Chat model:      {CHAT_MODEL}")
+    if chat_match and chat_match != CHAT_MODEL:
+        print(f"  Chat loaded as:  {chat_match}")
+    print(f"  Embedding model: {EMBEDDING_MODEL}")
+    if embedding_match and embedding_match != EMBEDDING_MODEL:
+        print(f"  Embedding loaded as: {embedding_match}")
+    print("")
+
+
 def run_cli():
     path = get_memory_file_path("CLI")
     if os.path.exists(path):
         os.remove(path)
+    print_model_usage(_get_loaded_models() or [])
     print(greet_message)
     while True:
         user_input = input("你：")
@@ -554,9 +764,33 @@ def _get_loaded_models():
         return None  # Server not reachable
 
 
+def _match_loaded_model(model_id, loaded_models):
+    """Return the loaded LM Studio model ID that matches a configured model."""
+    if not model_id or not loaded_models:
+        return None
+    if model_id in loaded_models:
+        return model_id
+
+    model_id_lower = model_id.lower()
+    for loaded_model in loaded_models:
+        if model_id_lower == loaded_model.lower():
+            return loaded_model
+
+    for loaded_model in loaded_models:
+        if model_id_lower in loaded_model.lower():
+            return loaded_model
+
+    return None
+
+
 def _ensure_models_loaded():
     """Check if required models are loaded, auto-load if not."""
-    from config import EMBEDDING_MODEL, CHAT_MODEL, LM_STUDIO_HOST
+    from config import (
+        EMBEDDING_MODEL,
+        CHAT_MODEL,
+        LM_STUDIO_AUTO_LOAD_MODELS,
+        LM_STUDIO_AUTO_START,
+    )
 
     # CHAT_MODEL_KEY is the path/key for lms load; falls back to CHAT_MODEL
     try:
@@ -566,6 +800,10 @@ def _ensure_models_loaded():
 
     loaded = _get_loaded_models()
     if loaded is None:
+        if not LM_STUDIO_AUTO_START:
+            logger.error("LM Studio API is not reachable. Start LM Studio server manually, then retry.")
+            return False
+
         # Server not reachable — try starting it
         from config import LMS_CLI_PATH
         if os.path.exists(LMS_CLI_PATH):
@@ -590,16 +828,22 @@ def _ensure_models_loaded():
             return False
 
     # Check embedding model
-    embed_loaded = any(EMBEDDING_MODEL in mid for mid in loaded)
-    if not embed_loaded:
+    embed_match = _match_loaded_model(EMBEDDING_MODEL, loaded)
+    if not embed_match:
+        if not LM_STUDIO_AUTO_LOAD_MODELS:
+            logger.error("Embedding model '%s' is not loaded in LM Studio.", EMBEDDING_MODEL)
+            return False
         logger.info("📦 Embedding model '%s' not loaded — loading...", EMBEDDING_MODEL)
         if not _lms_load(EMBEDDING_MODEL, identifier=EMBEDDING_MODEL):
             return False
         time.sleep(2)  # Brief wait for model to register in API
 
     # Check chat model
-    chat_loaded = any(CHAT_MODEL in mid for mid in loaded)
-    if not chat_loaded:
+    chat_match = _match_loaded_model(CHAT_MODEL, loaded)
+    if not chat_match:
+        if not LM_STUDIO_AUTO_LOAD_MODELS:
+            logger.error("Chat model '%s' is not loaded in LM Studio.", CHAT_MODEL)
+            return False
         logger.info("📦 Chat model '%s' not loaded — loading via key '%s'...", CHAT_MODEL, CHAT_MODEL_KEY)
         if not _lms_load(CHAT_MODEL_KEY, identifier=CHAT_MODEL):
             return False
@@ -608,13 +852,18 @@ def _ensure_models_loaded():
     # Final verification
     loaded = _get_loaded_models()
     if loaded:
-        logger.info("✅ Loaded models: %s", loaded)
+        logger.info("Using chat model: %s", CHAT_MODEL)
+        logger.info("Using embedding model: %s", EMBEDDING_MODEL)
+        logger.info("Loaded models: %s", loaded)
     return True
 
 
 def startup_check():
     """Verify critical dependencies before starting."""
     ok = True
+
+    logger.info("Using chat model: %s", CHAT_MODEL)
+    logger.info("Using embedding model: %s", EMBEDDING_MODEL)
 
     # Check .env credentials
     if not CHANNEL_ACCESS_TOKEN:
