@@ -37,6 +37,8 @@ echo Choose a mode in the bot window:
 echo 1 = CLI test
 echo 2 = LINE webhook with Cloudflare tunnel
 echo 3 = Both
+echo 4 = Rebuild knowledge database from PDFs in database folder
+echo 5 = Deployment diagnostics
 echo.
 NTULineBot.exe
 pause

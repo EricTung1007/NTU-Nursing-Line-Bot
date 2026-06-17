@@ -19,7 +19,9 @@ Copy-Item -LiteralPath (Join-Path $builtApp "NTULineBot.exe") -Destination $depl
 Copy-Item -LiteralPath (Join-Path $builtApp "_internal") -Destination $deploy -Recurse
 Copy-Item -LiteralPath (Join-Path $root "database") -Destination $deploy -Recurse
 Copy-Item -LiteralPath (Join-Path $root ".env.example") -Destination $deploy
+Copy-Item -LiteralPath (Join-Path $root "EDIT_BOT_CONFIG.bat") -Destination $deploy
 Copy-Item -LiteralPath (Join-Path $root "RUN_NTULineBot.bat") -Destination $deploy
+Copy-Item -LiteralPath (Join-Path $root "RUN_DEPLOYMENT_DIAGNOSTICS.bat") -Destination $deploy
 Copy-Item -LiteralPath (Join-Path $root "TEST_LM_STUDIO.bat") -Destination $deploy
 Copy-Item -LiteralPath (Join-Path $root "DEPLOY_WINDOWS_README.txt") -Destination $deploy
 Copy-Item -LiteralPath (Join-Path $root "build_windows_exe.bat") -Destination $deploy
@@ -29,10 +31,11 @@ Copy-Item -LiteralPath (Join-Path $root "requirements.txt") -Destination $deploy
 New-Item -ItemType Directory -Path (Join-Path $deploy "memory_data") | Out-Null
 
 $cloudflared = Join-Path $root "cloudflared-windows-amd64.exe"
-if (Test-Path $cloudflared) {
-    Copy-Item -LiteralPath $cloudflared -Destination (Join-Path $deploy "cloudflared-windows-amd64.exe")
-    Copy-Item -LiteralPath $cloudflared -Destination (Join-Path $deploy "cloudflared.exe")
+if (-not (Test-Path $cloudflared)) {
+    throw "Missing cloudflared-windows-amd64.exe. Download/copy it into the repo root before packaging, otherwise LINE webhook mode cannot work."
 }
+Copy-Item -LiteralPath $cloudflared -Destination (Join-Path $deploy "cloudflared-windows-amd64.exe")
+Copy-Item -LiteralPath $cloudflared -Destination (Join-Path $deploy "cloudflared.exe")
 
 Get-ChildItem -LiteralPath $deploy -Recurse -Force |
     Where-Object { $_.Name -like "._*" -or $_.Name -eq "__pycache__" } |

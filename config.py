@@ -31,6 +31,16 @@ def _load_dotenv(path=".env"):
 
 _load_dotenv(APP_DIR / ".env")
 
+
+def _env_int(name, default):
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
 # ---------------------------------------------------------------------------
 # LINE Bot Credentials  (loaded from .env — never hard-code secrets!)
 # ---------------------------------------------------------------------------
@@ -59,6 +69,14 @@ CHAT_ENDPOINT = f"{LM_STUDIO_HOST}/v1/chat/completions"
 COMPLETIONS_ENDPOINT = f"{LM_STUDIO_HOST}/v1/completions"
 MODELS_ENDPOINT = f"{LM_STUDIO_HOST}/v1/models"
 
+# ---------------------------------------------------------------------------
+# Flask webhook server
+# ---------------------------------------------------------------------------
+FLASK_HOST = os.environ.get("FLASK_HOST", "0.0.0.0")
+FLASK_PORT = _env_int("FLASK_PORT", 5001)
+FLASK_TUNNEL_HOST = os.environ.get("FLASK_TUNNEL_HOST", "127.0.0.1")
+FLASK_LOCAL_URL = f"http://{FLASK_TUNNEL_HOST}:{FLASK_PORT}"
+
 # LM Studio CLI path (for auto-loading models)
 _default_lms = os.path.join(os.path.expanduser("~"), ".lmstudio", "bin",
                             "lms.exe" if os.name == "nt" else "lms")
@@ -85,9 +103,13 @@ LINE_REPLY_ENDPOINT = "https://api.line.me/v2/bot/message/reply"
 # ---------------------------------------------------------------------------
 # FAISS Index & Data Storage
 # ---------------------------------------------------------------------------
-INDEX_PATH = str(RESOURCE_DIR / "database" / "faiss_index.index")
-METADATA_PATH = str(RESOURCE_DIR / "database" / "metadata.json")
-JSONL_PATH = str(RESOURCE_DIR / "database" / "combined.jsonl")
+DATA_DIR = Path(os.environ.get("DATABASE_DIR", APP_DIR / "database"))
+if not DATA_DIR.exists():
+    DATA_DIR = RESOURCE_DIR / "database"
+
+INDEX_PATH = str(DATA_DIR / "faiss_index.index")
+METADATA_PATH = str(DATA_DIR / "metadata.json")
+JSONL_PATH = str(DATA_DIR / "combined.jsonl")
 
 # ---------------------------------------------------------------------------
 # User Memory Files

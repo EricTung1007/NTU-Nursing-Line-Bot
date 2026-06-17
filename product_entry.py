@@ -31,15 +31,26 @@ def choose_mode():
     print("1. CLI 測試")
     print("2. Flask webhook + Cloudflare tunnel")
     print("3. Both")
+    print("4. Rebuild knowledge database")
+    print("5. Deployment diagnostics")
     return input("> ").strip().lower()
 
 
 def main():
     os.chdir(app_dir())
     configure_logging()
-    LB.startup_check()
 
     mode = choose_mode()
+    if mode in ("4", "prep", "rebuild", "rebuild-db", "database", "db"):
+        import prep
+        raise SystemExit(prep.build_knowledge_base())
+
+    if mode in ("5", "doctor", "diagnose", "diagnostics", "check"):
+        LB.run_deployment_doctor()
+        return
+
+    LB.startup_check()
+
     if mode in ("1", "cli"):
         LB.run_cli()
         return
@@ -73,7 +84,7 @@ def main():
                 tunnel_proc.kill()
         return
 
-    print("無效選項，請輸入 1、2 或 3。")
+    print("無效選項，請輸入 1、2、3、4 或 5。")
 
 
 if __name__ == "__main__":

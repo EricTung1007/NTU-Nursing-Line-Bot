@@ -12,7 +12,9 @@ import time
 import logging
 import subprocess
 import shutil
+import socket
 from datetime import datetime
+from pathlib import Path
 import sys
 
 sys.path.append(os.path.dirname(__file__))
@@ -25,7 +27,7 @@ from memory_module import (
 )
 from config import (
     CHAT_ENDPOINT, CHAT_MODEL, CHANNEL_ACCESS_TOKEN, CHANNEL_SECRET,
-    EMBEDDING_MODEL,
+    APP_DIR, EMBEDDING_MODEL, FLASK_HOST, FLASK_LOCAL_URL, FLASK_PORT, LM_STUDIO_HOST, RESOURCE_DIR,
     COMPLETIONS_ENDPOINT,
     LINE_WEBHOOK_ENDPOINT, LINE_WEBHOOK_TEST_ENDPOINT, LINE_PUSH_ENDPOINT, LINE_REPLY_ENDPOINT,
     LINE_ADMIN_USER_ID, NOTIFY_USER_IDS
@@ -67,6 +69,16 @@ def diag_warn(message):
 
 def diag_error(message):
     logger.error("[DIAG] %s", message)
+
+
+def has_real_line_access_token():
+    token = (CHANNEL_ACCESS_TOKEN or "").strip()
+    return bool(token) and token != "your_channel_access_token_here"
+
+
+def has_real_line_channel_secret():
+    secret = (CHANNEL_SECRET or "").strip()
+    return bool(secret) and secret != "your_channel_secret_here"
 
 
 def is_emergency_message(text):
@@ -484,6 +496,13 @@ def callback():
 # LINE push message
 # ---------------------------------------------------------------------------
 def send_push(user_id, text):
+    if not has_real_line_access_token():
+        diag_warn(
+            "LINE push skipped because LINE_CHANNEL_ACCESS_TOKEN is empty or still the placeholder. "
+            "Edit the .env file beside NTULineBot.exe, not the .env.example file."
+        )
+        return
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}"
@@ -505,17 +524,12 @@ def send_push(user_id, text):
 # ---------------------------------------------------------------------------
 # Cloudflare Tunnel
 # ---------------------------------------------------------------------------
-def run_cloudflare_tunnel():
+def find_cloudflared_path():
     cloudflared_path = shutil.which("cloudflared")
     if not cloudflared_path:
-        try:
-            from config import APP_DIR, RESOURCE_DIR
-            configured_dirs = [str(APP_DIR), str(RESOURCE_DIR)]
-        except ImportError:
-            configured_dirs = []
-
         search_dirs = [
-            *configured_dirs,
+            str(APP_DIR),
+            str(RESOURCE_DIR),
             os.path.dirname(__file__),
             os.getcwd(),
             os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else "",
@@ -536,12 +550,20 @@ def run_cloudflare_tunnel():
             if cloudflared_path:
                 break
 
+    return cloudflared_path
+
+
+def run_cloudflare_tunnel():
+    cloudflared_path = find_cloudflared_path()
     if not cloudflared_path:
-        logger.error("cloudflared CLI not found. Install it or run CLI mode only.")
+        logger.error("cloudflared CLI not found. LINE webhook modes need cloudflared.exe beside NTULineBot.exe or bundled in _internal.")
         return None, None
 
+    logger.info("Using cloudflared: %s", cloudflared_path)
+    logger.info("Starting Cloudflare tunnel to local Flask URL: %s", FLASK_LOCAL_URL)
+
     proc = subprocess.Popen(
-        [cloudflared_path, "tunnel", "--url", "http://127.0.0.1:5001"],
+        [cloudflared_path, "tunnel", "--url", FLASK_LOCAL_URL],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True
@@ -567,6 +589,13 @@ def run_cloudflare_tunnel():
 
 
 def update_line_webhook(public_url):
+    if not has_real_line_access_token():
+        diag_error(
+            "Cannot update LINE webhook because LINE_CHANNEL_ACCESS_TOKEN is empty or still the placeholder. "
+            "Open the .env file beside NTULineBot.exe and set LINE_CHANNEL_ACCESS_TOKEN to the long channel access token from LINE Developers."
+        )
+        return
+
     endpoint = f"{public_url}/callback"
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
@@ -682,7 +711,10 @@ def run_flask():
         send_push(notify_user_id, f"[後臺訊息]LINE Bot 已啟動（{datetime.now()})")
 
     threading.Thread(target=webhook_inactivity_watchdog, daemon=True).start()
-    app.run(host="0.0.0.0", port=5001, threaded=True)
+    logger.info("Flask webhook server port: %s", FLASK_PORT)
+    logger.info("Flask webhook local URL: http://127.0.0.1:%s/callback", FLASK_PORT)
+    logger.info("Flask bind address: %s:%s", FLASK_HOST, FLASK_PORT)
+    app.run(host=FLASK_HOST, port=FLASK_PORT, threaded=True)
 
 
 def webhook_inactivity_watchdog():
@@ -809,6 +841,175 @@ def _match_loaded_model(model_id, loaded_models):
     return None
 
 
+def _is_port_available(host, port):
+    bind_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1)
+        try:
+            sock.bind((bind_host, port))
+            return True
+        except OSError:
+            return False
+
+
+def _doctor_line(status, label, detail):
+    print(f"[{status}] {label}: {detail}")
+
+
+def ensure_editable_env_file():
+    env_path = Path(APP_DIR) / ".env"
+    if env_path.exists():
+        return env_path, False, "existing"
+
+    candidates = [
+        Path(APP_DIR) / ".env.example",
+        Path(RESOURCE_DIR) / ".env.example",
+    ]
+    for template in candidates:
+        if template.exists():
+            shutil.copyfile(template, env_path)
+            return env_path, True, f"created from {template}"
+
+    env_path.write_text(
+        "\n".join(
+            [
+                "# LINE Bot Credentials",
+                "LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token_here",
+                "LINE_CHANNEL_SECRET=your_channel_secret_here",
+                "LINE_ADMIN_USER_ID=",
+                "LINE_NOTIFY_USER_IDS=",
+                "LINE_ACTIVE_USER_IDS=",
+                "",
+                "# LM Studio",
+                "LM_STUDIO_HOST=http://127.0.0.1:1234",
+                "EMBEDDING_MODEL=text-embedding-bge-small-zh-v1.5",
+                "CHAT_MODEL=your_loaded_chat_model_id_here",
+                "CHAT_MODEL_KEY=",
+                "",
+                "# Webhook server",
+                "FLASK_PORT=5001",
+                "FLASK_HOST=0.0.0.0",
+                "FLASK_TUNNEL_HOST=127.0.0.1",
+                "",
+                "# Locked-down computers may need manual LM Studio setup",
+                "LM_STUDIO_AUTO_START=false",
+                "LM_STUDIO_AUTO_LOAD_MODELS=false",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return env_path, True, "created from built-in fallback"
+
+
+def run_deployment_doctor():
+    """Print actionable deployment diagnostics for non-developer operators."""
+    print("")
+    print("=== NTU Nursing LINE Bot Deployment Diagnostics ===")
+    print("")
+
+    env_path, created_env, env_source = ensure_editable_env_file()
+    if env_path.exists():
+        status = "WARN" if created_env else "PASS"
+        _doctor_line(status, ".env file", f"{env_path} ({env_source})")
+        if created_env:
+            _doctor_line("WARN", ".env reload", "Edit .env, save it, then restart this exe so the new values are loaded.")
+    else:
+        _doctor_line("FAIL", ".env file", f"Missing at {env_path}. Copy .env.example to .env and fill the LINE/model settings.")
+
+    if has_real_line_access_token():
+        _doctor_line("PASS", "LINE access token", "Looks filled, not the placeholder.")
+    else:
+        _doctor_line("FAIL", "LINE access token", "Set LINE_CHANNEL_ACCESS_TOKEN in .env.")
+
+    if has_real_line_channel_secret():
+        _doctor_line("PASS", "LINE channel secret", "Looks filled, not the placeholder.")
+    else:
+        _doctor_line("FAIL", "LINE channel secret", "Set LINE_CHANNEL_SECRET in .env from the same LINE channel.")
+
+    _doctor_line("INFO", "Flask port", str(FLASK_PORT))
+    _doctor_line("INFO", "Local callback URL", f"http://127.0.0.1:{FLASK_PORT}/callback")
+    if _is_port_available(FLASK_HOST, FLASK_PORT):
+        _doctor_line("PASS", "Flask port availability", "Port is free before starting the bot.")
+    else:
+        _doctor_line("FAIL", "Flask port availability", f"Port {FLASK_PORT} is already in use. Edit .env and set FLASK_PORT=5050, then restart.")
+
+    cloudflared_path = find_cloudflared_path()
+    if cloudflared_path:
+        _doctor_line("PASS", "cloudflared", cloudflared_path)
+    else:
+        _doctor_line("FAIL", "cloudflared", "Missing. Copy cloudflared.exe beside NTULineBot.exe or use NTULineBot-windows-deploy.zip.")
+
+    loaded = _get_loaded_models()
+    if loaded:
+        _doctor_line("PASS", "LM Studio API", "Responded with loaded models.")
+        chat_match = _match_loaded_model(CHAT_MODEL, loaded)
+        embed_match = _match_loaded_model(EMBEDDING_MODEL, loaded)
+        if chat_match:
+            _doctor_line("PASS", "Chat model", chat_match)
+        else:
+            _doctor_line("FAIL", "Chat model", f"{CHAT_MODEL} is not loaded. Load it in LM Studio or fix CHAT_MODEL in .env.")
+        if embed_match:
+            _doctor_line("PASS", "Embedding model", embed_match)
+        else:
+            _doctor_line("FAIL", "Embedding model", f"{EMBEDDING_MODEL} is not loaded. Load it in LM Studio or fix EMBEDDING_MODEL in .env.")
+    else:
+        _doctor_line("FAIL", "LM Studio API", f"No response from {LM_STUDIO_HOST}. Start LM Studio local server and load the models.")
+
+    if has_real_line_access_token():
+        headers = {
+            "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+            "Content-Type": "application/json",
+        }
+        try:
+            r = requests.get(LINE_WEBHOOK_ENDPOINT, headers=headers, timeout=15)
+            if r.status_code == 200:
+                current = r.json().get("endpoint") or ""
+                if current:
+                    _doctor_line("PASS", "LINE saved webhook", current)
+                    try:
+                        test = requests.post(
+                            LINE_WEBHOOK_TEST_ENDPOINT,
+                            headers=headers,
+                            data=json.dumps({"endpoint": current}),
+                            timeout=15,
+                        )
+                        body = test.json()
+                        if body.get("success") is True:
+                            _doctor_line("PASS", "LINE webhook delivery test", "LINE can reach the saved webhook URL.")
+                        else:
+                            _doctor_line(
+                                "FAIL",
+                                "LINE webhook delivery test",
+                                f"LINE could not reach the saved URL. statusCode={body.get('statusCode')} detail={body.get('detail')}. Restart mode 2 to create/update the tunnel.",
+                            )
+                    except Exception as e:
+                        _doctor_line("FAIL", "LINE webhook delivery test", f"Could not run test: {e}")
+                else:
+                    _doctor_line("FAIL", "LINE saved webhook", "No endpoint is saved in LINE Developers. Run mode 2.")
+            else:
+                _doctor_line("FAIL", "LINE saved webhook", f"LINE API returned {r.status_code}: {r.text}")
+        except Exception as e:
+            _doctor_line("FAIL", "LINE API access", f"Could not contact LINE API: {e}")
+    else:
+        _doctor_line("SKIP", "LINE webhook API checks", "No valid LINE_CHANNEL_ACCESS_TOKEN.")
+
+    print("")
+    print("How to fix the common offline-message problem:")
+    print("1. If cloudflared is FAIL, use the packaged deploy zip or copy cloudflared.exe beside NTULineBot.exe.")
+    print("2. If Flask port is FAIL, set FLASK_PORT=5050 in .env and restart.")
+    print("3. If LINE webhook delivery test is FAIL, run mode 2. Confirm the printed public_url matches the LINE saved webhook.")
+    print("4. If the bot can push an online message but cannot receive your message, focus on cloudflared/webhook delivery, not LM Studio.")
+    print("")
+    print("Config variables available in .env:")
+    print("- LINE_CHANNEL_ACCESS_TOKEN, LINE_CHANNEL_SECRET")
+    print("- LINE_NOTIFY_USER_IDS, LINE_ACTIVE_USER_IDS, LINE_ADMIN_USER_ID")
+    print("- FLASK_PORT, FLASK_HOST, FLASK_TUNNEL_HOST")
+    print("- LM_STUDIO_HOST, EMBEDDING_MODEL, CHAT_MODEL, CHAT_MODEL_KEY")
+    print("- LM_STUDIO_AUTO_START, LM_STUDIO_AUTO_LOAD_MODELS")
+    print("")
+
+
 def _ensure_models_loaded():
     """Check if required models are loaded, auto-load if not."""
     from config import (
@@ -890,12 +1091,26 @@ def startup_check():
 
     logger.info("Using chat model: %s", CHAT_MODEL)
     logger.info("Using embedding model: %s", EMBEDDING_MODEL)
+    logger.info("Using Flask webhook port: %s", FLASK_PORT)
+    logger.info("Local webhook health URL: http://127.0.0.1:%s/callback", FLASK_PORT)
+
+    cloudflared_path = find_cloudflared_path()
+    if cloudflared_path:
+        logger.info("Using cloudflared: %s", cloudflared_path)
+    else:
+        logger.warning("cloudflared.exe was not found. LINE webhook modes 2/3 cannot create a public Cloudflare URL.")
+        diag_warn(
+            "Copy cloudflared.exe beside NTULineBot.exe, or use the full NTULineBot-windows-deploy package. "
+            "If you copied only dist\\NTULineBot, cloudflared may be missing."
+        )
 
     # Check .env credentials
-    if not CHANNEL_ACCESS_TOKEN:
-        logger.warning("LINE_CHANNEL_ACCESS_TOKEN is empty — LINE webhook won't work (CLI is fine)")
-    if not CHANNEL_SECRET:
-        logger.warning("LINE_CHANNEL_SECRET is empty — signature validation will fail")
+    if not has_real_line_access_token():
+        logger.warning("LINE_CHANNEL_ACCESS_TOKEN is empty or placeholder — LINE webhook/push won't work (CLI is fine)")
+        diag_warn("Edit .env beside NTULineBot.exe and fill LINE_CHANNEL_ACCESS_TOKEN. Do not edit only .env.example.")
+    if not has_real_line_channel_secret():
+        logger.warning("LINE_CHANNEL_SECRET is empty or placeholder — signature validation will fail")
+        diag_warn("Edit .env beside NTULineBot.exe and fill LINE_CHANNEL_SECRET from the same LINE Messaging API channel.")
 
     # Check FAISS index
     from config import INDEX_PATH, METADATA_PATH
@@ -929,13 +1144,17 @@ if __name__ == "__main__":
     # Clean --verbose from argv so it doesn't interfere with mode selection
     argv = [a for a in sys.argv[1:] if a != "--verbose"]
 
-    # Startup health check
-    startup_check()
-
     if argv:
         mode = argv[0]
     else:
-        mode = input("請選擇模式：1=CLI測試，2=Flask webhook，3=同時執行：")
+        mode = input("請選擇模式：1=CLI測試，2=Flask webhook，3=同時執行，5=Deployment diagnostics：")
+
+    if mode in ("5", "doctor", "diagnose", "diagnostics", "check"):
+        run_deployment_doctor()
+        raise SystemExit(0)
+
+    # Startup health check
+    startup_check()
 
     if mode in ("1", "cli", "CLI"):
         run_cli()
