@@ -190,7 +190,7 @@ def create_admin_app(rt: Runtime, ring: RingHandler, on_quit: Callable[[], None]
     def kb_rebuild():
         return jsonify(started=rt.kb.start_rebuild())
 
-    # ---- doctor / debug ----------------------------------------------------
+    # ---- NP rounds / debug ----------------------------------------------------
     @app.get("/api/np")
     def np_checkup():
         checks = rt.np.run(deep=request.args.get("deep") == "1")
@@ -265,7 +265,7 @@ def create_admin_app(rt: Runtime, ring: RingHandler, on_quit: Callable[[], None]
 
     @app.get("/api/diagnostic")
     def diagnostic():
-        """Support bundle: logs, redacted settings, doctor report. Secrets are never included."""
+        """Support bundle: logs, redacted settings, NP report. Secrets are never included."""
         checks = rt.np.run(deep=True)
         report = json.dumps({"time": time.strftime("%Y-%m-%d %H:%M:%S"), "platform": platform.platform(), "python": sys.version,
                              "life": rt.life.value, "settings": rt.settings.redacted(),

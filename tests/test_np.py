@@ -33,7 +33,7 @@ def test_settings_validation_reset_and_last_good(tmp_path):
     assert s.get("line_channel_access_token") == "tok" and s.int("top_k") == 5
 
 
-def test_doctor_explains_and_fixes_common_operator_mistakes(rt, tmp_path):
+def test_np_explains_and_fixes_common_operator_mistakes(rt, tmp_path):
     assert explain_llama_log(["ggml_backend_alloc: cudaMalloc failed: out of memory"])[1] == "degrade_llm"
     assert explain_llama_log(["error: couldn't bind HTTP server socket"])[1] == "free_ports"
     assert explain_llama_log(["all fine"]) is None
