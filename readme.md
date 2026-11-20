@@ -29,7 +29,7 @@ Admin GUI :5050 (127.0.0.1 only, never exposed through the tunnel)
 | `nursebot/kb.py` | Document ingestion, batched embedding, atomic FAISS rebuild |
 | `nursebot/db.py`, `settings.py` | SQLite store; settings are edited in the GUI |
 | `nursebot/tunnel.py`, `line.py` | Cloudflare tunnel + LINE webhook registration; LINE API client |
-| `nursebot/doctor.py` | Health checks, plain-language steps, auto-fixes |
+| `nursebot/nurse_practitioner.py` | The in-app nurse practitioner (NP): health checks, plain-language steps, auto-fixes |
 | `nursebot/runtime.py` | Lifecycle, supervisor (auto-restart), incident log |
 | `nursebot/web/` | Admin GUI (API + single page) and the nurse note |
 

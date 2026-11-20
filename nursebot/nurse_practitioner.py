@@ -1,4 +1,4 @@
-"""Self-diagnosis and self-repair.
+"""The in-app nurse practitioner (NP): self-diagnosis and self-repair, i.e. the app does its own rounds.
 
 Every check returns a plain-language finding (Chinese + English), numbered steps a nurse can follow,
 and, when the app can fix it itself, a fix id behind an "Auto-fix" button. `fix_all` loops
@@ -27,7 +27,7 @@ from .settings import SCHEMA
 if TYPE_CHECKING:
     from .runtime import Runtime
 
-log = logging.getLogger("doctor")
+log = logging.getLogger("np")
 T = Tuple[str, str]  # (中文, English)
 LLAMA_RELEASES = "https://github.com/ggml-org/llama.cpp/releases"
 
@@ -91,7 +91,7 @@ def explain_llama_log(lines: List[str]) -> Optional[Tuple[T, Optional[str]]]:
     return None
 
 
-class Doctor:
+class NursePractitioner:
     def __init__(self, rt: "Runtime"):
         self.rt = rt
         self.s = rt.settings

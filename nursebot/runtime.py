@@ -23,7 +23,7 @@ from werkzeug.serving import make_server
 from . import paths
 from .bot import Bot, Dispatcher
 from .db import DB
-from .doctor import Doctor, explain_llama_log
+from .nurse_practitioner import NursePractitioner, explain_llama_log
 from .kb import KnowledgeBase
 from .line import LineClient
 from .llm import LlamaServers, LlmClient, find_llama_server, resolve_model
@@ -56,7 +56,7 @@ class Runtime:
         self.last_webhook_at: Optional[float] = None
         self.started_at: Optional[float] = None
         self.incidents: deque = deque(maxlen=200)   # what the app noticed and did, for the debug page
-        self.doctor = Doctor(self)
+        self.np = NursePractitioner(self)
         self._stop_sup = threading.Event()
         self._repair_log: Dict[str, List[float]] = {}
         self._http = None
@@ -96,7 +96,7 @@ class Runtime:
     def start(self) -> Dict[str, str]:
         if self.life == Life.STOPPED and self.settings.bool("auto_repair"):
             try:
-                self.doctor.preflight()
+                self.np.preflight()
             except Exception:
                 log.exception("preflight failed")
         with self._lock:

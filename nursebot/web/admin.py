@@ -191,23 +191,23 @@ def create_admin_app(rt: Runtime, ring: RingHandler, on_quit: Callable[[], None]
         return jsonify(started=rt.kb.start_rebuild())
 
     # ---- doctor / debug ----------------------------------------------------
-    @app.get("/api/doctor")
-    def doctor():
-        checks = rt.doctor.run(deep=request.args.get("deep") == "1")
-        return jsonify(checks=[c.to_dict() for c in checks], summary=rt.doctor.summary(checks))
+    @app.get("/api/np")
+    def np_checkup():
+        checks = rt.np.run(deep=request.args.get("deep") == "1")
+        return jsonify(checks=[c.to_dict() for c in checks], summary=rt.np.summary(checks))
 
-    @app.post("/api/doctor/fix")
-    def doctor_fix():
-        ok, zh, en = rt.doctor.fix((request.get_json(force=True) or {}).get("id", ""))
+    @app.post("/api/np/fix")
+    def np_fix():
+        ok, zh, en = rt.np.fix((request.get_json(force=True) or {}).get("id", ""))
         return jsonify(ok=ok, zh=zh, en=en)
 
-    @app.post("/api/doctor/fix_all")
-    def doctor_fix_all():
-        return jsonify(started=rt.doctor.fix_all_async())
+    @app.post("/api/np/fix_all")
+    def np_fix_all():
+        return jsonify(started=rt.np.fix_all_async())
 
-    @app.get("/api/doctor/job")
-    def doctor_job():
-        return jsonify(rt.doctor.job())
+    @app.get("/api/np/job")
+    def np_job():
+        return jsonify(rt.np.job())
 
     @app.get("/api/incidents")
     def incidents():
@@ -266,7 +266,7 @@ def create_admin_app(rt: Runtime, ring: RingHandler, on_quit: Callable[[], None]
     @app.get("/api/diagnostic")
     def diagnostic():
         """Support bundle: logs, redacted settings, doctor report. Secrets are never included."""
-        checks = rt.doctor.run(deep=True)
+        checks = rt.np.run(deep=True)
         report = json.dumps({"time": time.strftime("%Y-%m-%d %H:%M:%S"), "platform": platform.platform(), "python": sys.version,
                              "life": rt.life.value, "settings": rt.settings.redacted(),
                              "checks": [c.to_dict() for c in checks], "kb": rt.kb.status(),

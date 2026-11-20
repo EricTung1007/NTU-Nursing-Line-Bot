@@ -4,7 +4,7 @@ import pytest
 
 from nursebot import paths
 from nursebot.db import DB
-from nursebot.doctor import explain_llama_log
+from nursebot.nurse_practitioner import explain_llama_log
 from nursebot.runtime import Runtime
 from nursebot.settings import Settings
 
@@ -38,15 +38,15 @@ def test_doctor_explains_and_fixes_common_operator_mistakes(rt, tmp_path):
     assert explain_llama_log(["error: couldn't bind HTTP server socket"])[1] == "free_ports"
     assert explain_llama_log(["all fine"]) is None
 
-    ids = {c.id: c for c in rt.doctor.run()}
+    ids = {c.id: c for c in rt.np.run()}
     assert ids["llama_server"].level == "bad" and ids["llama_server"].fix == "locate_files"
     assert ids["line_cfg"].steps and ids["line_cfg"].level == "bad"  # plain-language steps, not just a red light
 
     # operator typed a model path that does not exist, and a non-number port
     rt.settings.update({"chat_model_path": "models/gone.gguf", "top_k": "x"})
-    ids = {c.id: c for c in rt.doctor.run()}
+    ids = {c.id: c for c in rt.np.run()}
     assert ids["model_paths"].fix == "clear_bad_paths" and ids["settings"].fix == "reset_invalid"
-    rt.doctor.fix("clear_bad_paths"); rt.doctor.fix("reset_invalid")
+    rt.np.fix("clear_bad_paths"); rt.np.fix("reset_invalid")
     assert rt.settings.get("chat_model_path") == "" and rt.settings.int("top_k") == 5
 
     # files dropped in Downloads are found and wired up without copying multi-GB models
@@ -55,15 +55,15 @@ def test_doctor_explains_and_fixes_common_operator_mistakes(rt, tmp_path):
     (dl / "qwen-chat-q4.gguf").write_bytes(b"x" * 100)
     (dl / "bge-small-zh.gguf").write_bytes(b"x" * 10)
     (dl / "llama-server").write_bytes(b"x")
-    ok, zh, _ = rt.doctor.fix("locate_files")
+    ok, zh, _ = rt.np.fix("locate_files")
     assert ok
     assert rt.settings.get("chat_model_path").endswith("qwen-chat-q4.gguf")
     assert rt.settings.get("embed_model_path").endswith("bge-small-zh.gguf")
-    assert {c.id: c for c in rt.doctor.run()}["llama_server"].level == "ok"
+    assert {c.id: c for c in rt.np.run()}["llama_server"].level == "ok"
 
 
 def test_ports_and_repair_rate_limit(rt):
-    from nursebot.doctor import port_busy
+    from nursebot.nurse_practitioner import port_busy
     import socket
     s = socket.socket()
     try:
@@ -75,8 +75,8 @@ def test_ports_and_repair_rate_limit(rt):
     rt.settings.update({"webhook_port": str(busy)})
     try:
         assert port_busy(busy)
-        assert {c.id: c for c in rt.doctor.run()}["ports"].fix == "free_ports"
-        rt.doctor.fix("free_ports")
+        assert {c.id: c for c in rt.np.run()}["ports"].fix == "free_ports"
+        rt.np.fix("free_ports")
         assert rt.settings.int("webhook_port") != busy
     finally:
         s.close()

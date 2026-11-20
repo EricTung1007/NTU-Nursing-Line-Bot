@@ -11,7 +11,7 @@
    - **紅燈**：有問題。按旁邊的 **「一鍵修復」**。
 3. 下班不用關程式。要關電腦前，到「總覽」按「關閉程式」。
 
-> 程式自己會看顧自己：模型或網路當掉時，會自動重新啟動並記在「除錯」頁的事件記錄。
+> 程式裡住著一位 **NP（執業護理師）**，會自己巡房：模型或網路當掉時，會自動重新啟動並記在「除錯」頁的事件記錄。
 
 ## 出問題時（照順序做）
 
@@ -65,7 +65,7 @@ This program is the ward's education helper: mothers and families ask questions 
    - **Red**: a problem. Press **Fix everything** next to it.
 3. No need to close the program at the end of a shift. Before shutting down the computer, press "Quit" on the Overview page.
 
-> The program looks after itself: if the model or the network drops, it restarts it automatically and notes it in the Debug page's event list.
+> A resident **NP (nurse practitioner)** lives inside the program and makes its own rounds: if the model or the network drops, it restarts it automatically and notes it in the Debug page's event list.
 
 ## When something goes wrong (in this order)
 

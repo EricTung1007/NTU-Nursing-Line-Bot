@@ -87,7 +87,7 @@ details{margin-top:8px}summary{cursor:pointer;color:var(--mute)}
 </section>
 
 <section id="debug">
-  <div class="card"><div class="row"><h2 style="margin:0;flex:1">健康檢查 <span class="en" style="display:inline">Health checks (full)</span></h2><button class="s" id="dref">重新檢查 Re-check</button></div><div id="dchecks" style="margin-top:8px"></div></div>
+  <div class="card"><div class="row"><h2 style="margin:0;flex:1">NP 巡房檢查 <span class="en" style="display:inline">NP rounds (full check-up)</span></h2><button class="s" id="dref">重新檢查 Re-check</button></div><div id="dchecks" style="margin-top:8px"></div></div>
   <div class="card"><div class="row"><h2 style="margin:0;flex:1">端對端測試 <span class="en" style="display:inline">Self-test</span></h2><button class="s" id="stest">執行 Run</button></div>
     <p class="small mute">依序測試：產生向量、搜尋知識庫、產生回答，並顯示每一步花的時間。</p><div id="stres"></div></div>
   <div class="card"><h2>近期表現 <span class="en" style="display:inline">Recent performance</span></h2><div id="metrics" class="small"></div></div>
@@ -131,16 +131,16 @@ function renderChecks(el,checks,showOk){
     ${c.fix?`<button class="s sm" data-fix="${c.fix}">${esc(c.fix_label[0])} <span class="en" style="display:inline">${esc(c.fix_label[1])}</span></button>`:''}</div>`).join('')||'<div class="mute small">一切正常 Everything is fine</div>';
 }
 document.addEventListener('click',async e=>{const f=e.target.closest('[data-fix]');if(!f)return;f.disabled=true;
-  try{const r=await api('/api/doctor/fix',{json:{id:f.dataset.fix}});flash(r.ok,r.zh,r.en)}catch(x){flash(false,'修復失敗','Fix failed')}
+  try{const r=await api('/api/np/fix',{json:{id:f.dataset.fix}});flash(r.ok,r.zh,r.en)}catch(x){flash(false,'修復失敗','Fix failed')}
   setTimeout(()=>{refreshLight();show(tab)},800)});
 function flash(ok,zh,en){$('#fixlog').innerHTML=`<div class="banner" style="margin:0 0 8px;${ok?'':'border-color:var(--bad)'}">${esc(zh)} <span class="en" style="display:inline">${esc(en)}</span></div>`;setTimeout(()=>{if(!fixPoll)$('#fixlog').innerHTML=''},9000)}
 async function refreshLight(){
-  try{const d=await api('/api/doctor');const s=d.summary;const c=s.bad?'bad':s.warn?'warn':'ok';
+  try{const d=await api('/api/np');const s=d.summary;const c=s.bad?'bad':s.warn?'warn':'ok';
     $('#light').className='light '+c;$('#lightTxt').textContent=c==='ok'?'一切正常 All good':c==='warn'?'請稍候或按一鍵修復 Wait or fix':'有問題，請按一鍵修復 Problem: press Fix';
     $('#fixall').style.display=c==='ok'?'none':'';window._checks=d.checks;if(tab==='home')renderChecks($('#checklist'),d.checks,false)}catch(e){}}
 let fixPoll=null;
-$('#fixall').onclick=async()=>{$('#fixall').disabled=true;await api('/api/doctor/fix_all',{method:'POST'});
-  fixPoll=setInterval(async()=>{const j=await api('/api/doctor/job');
+$('#fixall').onclick=async()=>{$('#fixall').disabled=true;await api('/api/np/fix_all',{method:'POST'});
+  fixPoll=setInterval(async()=>{const j=await api('/api/np/job');
     $('#fixlog').innerHTML=`<div class="banner" style="margin:0 0 8px">${j.log.map(l=>`<div>${l.ok?'':'! '}${esc(l.zh)} <span class="en" style="display:inline">${esc(l.en)}</span></div>`).join('')||'檢查中… Checking…'}</div>`;
     if(j.done){clearInterval(fixPoll);fixPoll=null;$('#fixall').disabled=false;refreshLight();show(tab);setTimeout(()=>{if(!fixPoll)$('#fixlog').innerHTML=''},15000)}},1500)};
 
@@ -256,7 +256,7 @@ $('#ssave').onclick=async()=>{const d={};document.querySelectorAll('[data-k]').f
 /* ---------- debug ---------- */
 async function loadDebug(){
   $('#dchecks').innerHTML='<div class="mute small">檢查中… Checking…</div>';
-  api('/api/doctor?deep=1').then(d=>renderChecks($('#dchecks'),d.checks,true));
+  api('/api/np?deep=1').then(d=>renderChecks($('#dchecks'),d.checks,true));
   api('/api/metrics').then(m=>{$('#metrics').innerHTML=`最近 ${m.n} 則回覆：中位數 ${m.p50??'-'} 秒，95% ${m.p95??'-'} 秒，錯誤 ${m.errors}，查無資料 ${m.no_data}。<br>上次收到 LINE 訊息：${m.last_webhook_at?ago(m.last_webhook_at):'尚未'}；運作時間：${m.uptime?Math.round(m.uptime/60)+' 分鐘':'-'}`});
   api('/api/incidents').then(r=>{$('#incidents').innerHTML=r.items.map(i=>`<div style="padding:4px 0">${dot(i.level==='info'?'ok':i.level==='bad'?'bad':'warn')}<span class="mute">${new Date(i.ts*1000).toLocaleTimeString()}</span> ${esc(i.zh)}<span class="en">${esc(i.en)}</span></div>`).join('')||'<span class="mute">目前沒有事件 No events yet</span>'});
   loadLogs();
@@ -265,7 +265,7 @@ $('#dref').onclick=loadDebug;
 $('#stest').onclick=async()=>{$('#stest').disabled=true;$('#stres').innerHTML='<span class="mute small">測試中…（第一次可能較慢） Running…</span>';
   const r=await api('/api/selftest',{method:'POST'});$('#stest').disabled=false;
   $('#stres').innerHTML=r.steps.map(s=>`<div class="chk">${dot(s.ok?'ok':'bad')}<div>${bi([s.zh,s.en])}<div class="small mute">${s.secs} 秒 ${esc(s.detail)}</div></div></div>`).join('')+
-   (r.ok?'':'<p class="small">失敗的那一步就是問題所在；上方「健康檢查」會告訴您怎麼修。 The failed step is the culprit; the health checks above explain the fix.</p>')};
+   (r.ok?'':'<p class="small">失敗的那一步就是問題所在；上方「NP 巡房檢查」會告訴您怎麼修。 The failed step is the culprit; the NP rounds above explain the fix.</p>')};
 async function loadLogs(){if(tab!=='debug')return;
   const r=await api(`/api/logs?source=${$('#lsrc').value}&level=${$('#llvl').value}&q=${encodeURIComponent($('#lq').value)}`);
   const pre=$('#lpre'),atEnd=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-20;pre.textContent=r.lines.join('\n')||'（沒有記錄 empty）';if(atEnd)pre.scrollTop=1e9;
