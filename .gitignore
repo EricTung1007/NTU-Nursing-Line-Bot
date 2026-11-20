@@ -25,3 +25,11 @@ combined.jsonl
 # Keep folder structure
 !database/
 !memory_data/
+
+# Local runtime state
+data/
+models/*.gguf
+bin/llama-server*
+bin/*.dll
+database/kb_info.json
+database/*.tmp

@@ -1,27 +1,10 @@
+"""Prompt text and prompt assembly (text moved verbatim from the old prompts.py / RAG_module.py)."""
+from __future__ import annotations
 
-greet_message = """Bot:您好，我是產科與母嬰照護顧問。
+from collections import defaultdict
+from typing import Any, Dict, List
 
-請先依照下列表單填寫基本資料，完成後即可開始問答：
-
-1. 姓名：
-2. 性別：
-3. 預產期：
-4. 懷孕次數：
-5. 生產次數：
-
-填寫說明：
-- 懷孕次數：包含這一次懷孕。例如這是第二次懷孕，請填 2。
-- 生產次數：只計算已經生產過的次數，這一次還沒生產不算。例如之前生過 1 胎，這次還在懷孕中，請填 1。
-- 預產期：請填西元年月日，例如 2026/10/15。
-
-範例：
-1. 姓名：陳雅婷
-2. 性別：女
-3. 預產期：2026/10/15
-4. 懷孕次數：2
-5. 生產次數：1"""
-            
-normal_system_prompt = f"""
+normal_system_prompt = """
         你是一位專業【產科與母嬰照護顧問】，僅只依據下方提供的參考資料及使用者資料解答懷孕相關問題，只以繁體中文回答問題。
         凡與孕期、產後或母嬰健康相關的常見症狀（如：頻尿、腰痠、抽筋、火燒心、便祕、失眠、胎動、飲食與運動）均視為產科範圍。
 
@@ -44,6 +27,7 @@ normal_system_prompt = f"""
         • 台大醫院：(02) 2312-3456，轉 266546（衛教）／266549（診後）／270908・270909（產房）
         • 衛福部孕產婦諮詢專線：0800-870-870
 """
+
 no_data_reply = """我沒有相關資料，請詢問專業人員。
 
 就醫與諮詢管道:
@@ -77,12 +61,40 @@ G(懷孕次數)P(生產次數)W(懷孕週數)IsDad(True或False)Name(姓名)
 - 正確範例：G(2)P(1)W()IsDad(False)Name(陳雅婷)
 - 缺資料範例：G()P()W()IsDad()Name()"""
 
-fields_examples = """範例輸入：
-1. 姓名：陳雅婷
-2. 性別：女
-3. 預產期：2026/10/15
-4. 懷孕次數：2
-5. 生產次數：1
+FIELD_DESCRIPTIONS = {
+    "G/P": "孕產史（例如：我懷過1胎，生過0胎）",
+    "W": "目前週數（例如：目前5週）",
+    "IsDad": "您是否為父親（請回答：我是父親/不是父親）",
+    "Name": "您的名字（例如：小美）",
+}
 
-範例輸出：
-G(2)P(1)W()IsDad(False)Name(陳雅婷)"""
+
+def summarize_sources(contexts: List[Dict[str, Any]]) -> str:
+    pages: Dict[str, set] = defaultdict(set)
+    for c in contexts:
+        pages[c["source"]].add(c["page"] if c["page"] != -1 else "無頁碼")
+    return "; ".join(
+        f"{book} 第{','.join(str(p) for p in sorted(ps, key=lambda x: (isinstance(x, int), x)))}頁"
+        for book, ps in pages.items()
+    )
+
+
+def build_messages(contexts: List[Dict[str, Any]], question: str, user: Dict[str, Any], weeks, tri: str,
+                   history: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    who = {1: "是準爸爸", 0: "不是準爸爸"}.get(user.get("is_dad"), "是否為準爸爸：未知")
+    # History excludes the question being answered (it is already saved; it goes in the user turn).
+    prior = history[:-1] if history and history[-1]["role"] == "user" else history
+    hist = "\n".join(("User: " if h["role"] == "user" else "Bot: ") + h["text"] for h in prior)
+    ctx = "\n\n".join(c["text"] for c in contexts)
+    system = f"""
+        {normal_system_prompt}\n
+        📖 參考資料：
+        {ctx}\n
+        🗂 使用者資料：
+        • 懷孕次數 G：{user.get('g', 0)}
+        • 生產次數 P：{user.get('p', 0)}
+        • 使用者身份：{who}
+        • 目前孕週：{weeks if weeks is not None else '未提供'} 週，{tri}
+        • 歷史對話紀錄：{hist}
+        """
+    return [{"role": "system", "content": system}, {"role": "user", "content": f"使用者問題：\n{question}"}]

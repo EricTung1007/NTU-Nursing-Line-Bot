@@ -1,0 +1,2 @@
+# Optional: native window instead of the browser
+pywebview

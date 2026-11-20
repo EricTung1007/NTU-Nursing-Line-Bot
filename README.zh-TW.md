@@ -2,140 +2,52 @@
 
 # AI 驅動產前衛教 LINE Bot
 
-本專案為國立臺灣大學畢業專題之工作原型，開發了一款中英雙語產前衛教聊天機器人。系統整合本地部署之大型語言模型與檢索增強生成（RAG）技術，以臺灣官方母嬰健康衛教資料作為知識基礎。
+國立臺灣大學畢業專題之工作原型：中英雙語產前衛教聊天機器人，以本地大型語言模型搭配檢索增強生成（RAG），知識來源為臺灣官方母嬰健康衛教資料，透過 LINE 提供服務。
 
-本專案以低成本、注重隱私之方式設計，透過 LINE——臺灣使用者已廣泛使用的通訊平台——提供個人化產前衛教資訊。其更廣泛的目的在於探索以臨床為基礎的 AI 系統，如何在不需安裝新應用程式、不需註冊新帳號、不需完全依賴商業雲端服務的前提下，改善民眾取得可信賴健康衛教資訊的管道。
-
-## 研究目標
-
-- 提升產前健康衛教的可及性與一致性。
-- 透過以驗證過的衛教資料為基礎，降低模型幻覺（hallucination）風險。
-- 探索本地可部署的 AI 是否能支援多語言、符合臨床的健康溝通在日常照護情境中的應用。
-- 透過使用目標族群已熟悉的通訊平台，降低採用門檻。
-
-## 系統概覽
-
-- **介面**：Flask + LINE Messaging API
-- **生成**：透過 LM Studio 或 OpenAI 相容端點的本地語言模型
-- **檢索**：基於策展產科與母嬰衛教內容的 FAISS 向量索引
-- **個人化**：懷孕週數、孕產史（G/P）、家長角色、使用者姓名
-- **記憶**：輕量化逐使用者記憶檔案，維持對話脈絡
+此版本不需要終端機視窗，也不需要 LM Studio：以本機圖形介面管理一切，推論使用 llama.cpp，所有資料存放於單一 SQLite 檔案。
 
 ## 系統架構
 
 ```
-LINE App ──▶ Cloudflare Tunnel ──▶ Flask /callback ──▶ handle_event()
-                                                        │
-                                                        ├─ memory_module  （使用者檔案與歷史）
-                                                        ├─ RAG_module     （FAISS + LM Studio 嵌入）
-                                                        └─ LM Studio     （對話生成）
+LINE ──▶ Cloudflare 通道 ──▶ Webhook 伺服器 :5001（僅 /callback，對外）
+                                  │  立即回應 200，實際處理交給背景工作池
+                                  ▼
+                             Bot 流程 ── SQLite（使用者、對話、設定）
+                                  │  更正指令 → 緊急偵測 → 資料填寫 → RAG 回答
+                                  ├─ FAISS 知識庫（向量：llama-server --embeddings）
+                                  └─ 對話模型（llama-server）
+
+管理介面 :5050（僅限本機 127.0.0.1，不會經由通道對外）
 ```
 
-## 主要檔案
+## 安裝與啟動
 
-| 檔案 | 用途 |
-|---|---|
-| `LB.py` | LINE Webhook 處理與回應調度 |
-| `config.py` | 所有設定（從 `.env` 讀取機密） |
-| `prompts.py` | 系統提示詞與少量樣本範例 |
-| `RAG_module.py` | 檢索與增強提示詞建構 |
-| `memory_module.py` | 使用者記憶與個人資料提取 |
-| `prep.py` | 知識庫建置（PDF → JSONL → FAISS） |
-| `product_entry.py` | PyInstaller 打包進入點 |
-| `start.bat` | Windows 一鍵啟動（啟動 LM Studio + Bot） |
-| `start.command` | macOS 一鍵啟動（啟動 LM Studio + Bot） |
+1. 安裝 Python 3.9+，執行 `pip install -r requirements.txt`（若要原生視窗，再安裝 `requirements-gui.txt`）。
+2. 放入下列檔案（不在 git 中）：
+   - `bin/llama-server`（取自 [llama.cpp releases](https://github.com/ggml-org/llama.cpp/releases)，相依的 DLL 一併放在同資料夾）
+   - `bin/cloudflared`（已附 macOS arm64 版本）
+   - `models/` 內放對話模型與檢索模型的 `.gguf`（檢索模型檔名需含 `embed` 或 `bge`）
+3. 執行 `python app.py`。「總覽」頁會列出尚未完成的項目。
+4. 「設定」頁貼上 LINE Channel Access Token 與 Secret；「知識庫」頁按「重建知識庫」。
+5. 按「啟動機器人」。通道網址會自動登錄到 LINE。
 
-## 前置需求
+從舊版升級：首次啟動時，程式會一次性把 `.env` 的 LINE 金鑰與 `memory_data/*.txt` 匯入 SQLite。更換檢索模型後須重建知識庫，介面會在索引與目前模型不一致時提示。
 
-- **Python** 3.11+
-- **LM Studio** 0.3.x — 載入以下模型：
-  1. `text-embedding-bge-small-zh-v1.5`（嵌入模型）
-  2. 您選擇的對話模型（在 `config.py` 中更新 `CHAT_MODEL`）
-- **Cloudflare Tunnel**（`cloudflared` CLI）— 用於公開 Webhook
-- **LINE Messaging API** 頻道（[開發者控制台](https://developers.line.biz/console/)）
+## 護理人員可在介面中完成（不需檔案、不需指令）
 
-## 快速開始
+- 啟動／停止機器人，查看 LINE、模型、知識庫狀態
+- 檢視、編輯、刪除使用者，閱讀對話內容
+- 查看機器人答不出來的問題（知識缺口），上傳文件並重建
+- 以測試身分與機器人對話（不會傳到 LINE）
+- 調整緊急關鍵字與緊急回覆內容
+- 下載備份（資料庫＋文件）
 
-### 1. 複製專案並安裝依賴
+## 測試
 
 ```bash
-git clone https://github.com/EricTung1007/NTU-Nursing-Line-Bot.git
-cd NTU-Nursing-Line-Bot
-pip install -r requirements.txt
+pip install pytest && python -m pytest tests
 ```
 
-### 2. 設定機密資訊
+## 免責聲明
 
-複製範本環境檔並填入您的憑證：
-
-```bash
-cp .env.example .env
-```
-
-編輯 `.env`，填入您的 LINE 頻道 Token、Secret 及使用者 ID。**切勿提交 `.env`** — 已在 `.gitignore` 中排除。
-
-### 3. 建立知識庫（僅首次需要）
-
-將 PDF 檔案放入 `database/` 資料夾，然後執行：
-
-```bash
-python prep.py
-```
-
-此步驟將 PDF 轉換為 JSONL → FAISS 向量索引。
-
-### 4. 啟動 Bot
-
-**方法 A — 一鍵啟動（macOS）：**
-
-```bash
-chmod +x start.command
-./start.command
-```
-
-若 LM Studio 的 `lms` CLI 不在 `~/.lmstudio/bin/lms`，請在 `.env` 設定 `LMS_CLI_PATH`。
-
-**方法 B — 一鍵啟動（Windows）：**
-
-```bash
-start.bat
-```
-
-**方法 C — 手動啟動：**
-
-```bash
-python LB.py
-```
-
-系統會提示選擇模式：
-- `1` — CLI 測試模式（在終端機中對話）
-- `2` — Flask Webhook 模式（LINE Bot）
-- `3` — 同時執行
-
-啟動時會自動載入 LM Studio 所需模型（若尚未載入）。
-
-## 資料更正指令（LINE）
-
-使用者可透過傳送以「更正」開頭的訊息來修改個人資料：
-
-| 指令 | 範例 |
-|---|---|
-| 完整資料 | `更正G(2)P(1)W(10)IsDad(False)Name(小美)` |
-| 僅 G/P | `更正G(3)P(1)` |
-| 僅週數 | `更正W(20)` |
-| 家長角色 | `更正IsDad(True)` |
-| 僅名字 | `更正Name(小華)` |
-
-## 目前狀態與限制
-
-本專案為學術原型，用於海報發表與技術展示。目前的評估為初步且基於情境的測試，尚未經過大規模使用者測試或臨床部署。
-
-## 打包（選用）
-
-```bash
-python -m PyInstaller --clean --onedir --console --name NTULineBot product_entry.py
-```
-
-## 授權
-
-本專案用於臺大醫院之學術與臨床教育用途。
+教育用途原型，不能取代專業醫療建議。

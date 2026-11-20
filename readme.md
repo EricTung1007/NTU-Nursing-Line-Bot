@@ -1,141 +1,64 @@
-[**中文版 README**](README.zh-TW.md) ｜ English
+[中文](README.zh-TW.md) | **English**
 
-# AI-Driven Prenatal Education LINE Bot
+# AI Prenatal Education LINE Bot
 
-This repository contains the working capstone prototype for a bilingual Chinese/English prenatal education chatbot developed at National Taiwan University. The system integrates a locally hosted large language model with retrieval-augmented generation grounded in curated maternal health education materials from official Taiwanese health sources.
+Bilingual prenatal education chatbot (NTU capstone prototype). A local LLM answers questions using retrieval over official Taiwanese maternal and child health materials, delivered through LINE.
 
-The project was designed as a low-cost, privacy-conscious prototype that could deliver personalized prenatal education through LINE, a communication platform already familiar to many users in Taiwan. Its broader purpose was to explore how clinically grounded AI systems can improve access to trustworthy health education without requiring new apps, new accounts, or full dependence on commercial cloud services.
-
-## Research Objective
-
-- Improve accessibility and consistency of prenatal health education.
-- Reduce hallucination risk by grounding responses in verified health education materials.
-- Explore whether locally deployable AI can support multilingual, clinically aligned health communication in everyday care settings.
-- Reduce adoption friction by using a communication platform already familiar to the target population.
-
-## System Overview
-
-- **Interface**: Flask + LINE Messaging API.
-- **Generation**: locally hosted chat model through LM Studio or OpenAI-compatible endpoint.
-- **Retrieval**: FAISS vector index over curated obstetric and maternal health education content.
-- **Personalization**: pregnancy week, gravida/parity, parental role, and user name.
-- **Memory**: lightweight per-user memory file for context continuity.
+This version runs without a terminal and without LM Studio: a local GUI manages everything, inference is llama.cpp, and all state lives in one SQLite file.
 
 ## Architecture
 
 ```
-LINE App ──▶ Cloudflare Tunnel ──▶ Flask /callback ──▶ handle_event()
-                                                        │
-                                                        ├─ memory_module  (per-user profile & history)
-                                                        ├─ RAG_module     (FAISS + LM Studio embeddings)
-                                                        └─ LM Studio     (chat completion)
+LINE ──▶ Cloudflare tunnel ──▶ webhook server :5001 (/callback only, public)
+                                   │  returns 200 at once, work runs in a worker pool
+                                   ▼
+                              Bot pipeline ── SQLite (users, messages, settings)
+                                   │  correction cmd → emergency check → onboarding → RAG answer
+                                   ├─ FAISS knowledge base  (embeddings: llama-server --embeddings)
+                                   └─ chat model            (llama-server)
+
+Admin GUI :5050 (127.0.0.1 only, never exposed through the tunnel)
 ```
 
-## Main Files
-
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `LB.py` | LINE webhook handling and response orchestration |
-| `config.py` | All configuration (reads secrets from `.env`) |
-| `prompts.py` | System prompts and few-shot examples |
-| `RAG_module.py` | Retrieval and augmented prompt construction |
-| `memory_module.py` | User-specific memory and profile extraction |
-| `prep.py` | Knowledge base preparation (PDF → JSONL → FAISS) |
-| `product_entry.py` | PyInstaller entry point for packaged builds |
-| `start.bat` | One-click Windows launcher (starts LM Studio + bot) |
-| `start.command` | One-click macOS launcher (starts LM Studio + bot) |
+| `app.py` | Entry point. Opens the GUI (native window if `pywebview` is installed, else browser) |
+| `nursebot/profile.py` | Onboarding state machine and all profile / 更正 parsing |
+| `nursebot/bot.py` | Conversation pipeline and per-user ordered worker pool |
+| `nursebot/llm.py` | llama-server supervisor and OpenAI-compatible client |
+| `nursebot/kb.py` | Document ingestion, batched embedding, atomic FAISS rebuild |
+| `nursebot/db.py`, `settings.py` | SQLite store; settings are edited in the GUI |
+| `nursebot/tunnel.py`, `line.py` | Cloudflare tunnel + LINE webhook registration; LINE API client |
+| `nursebot/web/` | Admin GUI (API + single page) |
 
-## Prerequisites
+## Setup
 
-- **Python** 3.11+
-- **LM Studio** 0.3.x — load the following models:
-  1. `text-embedding-bge-small-zh-v1.5` (embedding)
-  2. A chat model of your choice (update `CHAT_MODEL` in `config.py`)
-- **Cloudflare Tunnel** (`cloudflared` CLI) — for public webhook exposure
-- A **LINE Messaging API** channel ([developer console](https://developers.line.biz/console/))
+1. Python 3.9+, then `pip install -r requirements.txt` (add `requirements-gui.txt` for a native window).
+2. Put these files in place (not in git):
+   - `bin/llama-server` (from a [llama.cpp release](https://github.com/ggml-org/llama.cpp/releases); keep its DLLs/libs beside it)
+   - `bin/cloudflared` (a macOS arm64 build is already there)
+   - `models/<chat-model>.gguf` and `models/<embedding-model>.gguf` (the embedding file name should contain `embed` or `bge`; the first non-embedding `.gguf` is used for chat)
+3. `python app.py`. The Overview page shows a checklist of what is still missing.
+4. Settings page: paste the LINE Channel Access Token and Secret. Knowledge Base page: press "Rebuild".
+5. Press "Start bot". The tunnel URL is registered with LINE automatically.
 
-## Quick Start
+Upgrading from the old version: on first launch the app imports `.env` LINE credentials and `memory_data/*.txt` into SQLite once. Rebuild the knowledge base after switching the embedding model; the GUI warns when the index was built with a different one.
 
-### 1. Clone & install dependencies
+## What staff can do in the GUI (no files, no commands)
 
-```bash
-git clone https://github.com/EricTung1007/NTU-Nursing-Line-Bot.git
-cd NTU-Nursing-Line-Bot
-pip install -r requirements.txt
-```
+- Start/stop the bot, see LINE / model / knowledge base status
+- View, edit, delete users and read their conversations
+- See questions the bot could not answer (knowledge gaps), then upload documents and rebuild
+- Chat with the bot as a test user (not sent to LINE)
+- Edit emergency keywords and the emergency reply
+- Download a backup (database + documents)
 
-### 2. Configure secrets
-
-Copy the example env file and fill in your credentials:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your LINE channel token, secret, and user IDs. **Never commit `.env`** — it is already in `.gitignore`.
-
-### 3. Build the knowledge base (first time only)
-
-Place your PDF files in the `database/` folder, then run:
+## Tests
 
 ```bash
-python prep.py
+pip install pytest && python -m pytest tests
 ```
 
-This converts PDFs → JSONL → FAISS vector index.
+## Disclaimer
 
-### 4. Run the bot
-
-**Option A — One-click (macOS):**
-
-```bash
-chmod +x start.command
-./start.command
-```
-
-If LM Studio installed the `lms` CLI somewhere other than `~/.lmstudio/bin/lms`, set `LMS_CLI_PATH` in `.env`.
-
-**Option B — One-click (Windows):**
-
-```bash
-start.bat
-```
-
-**Option C — Manual:**
-
-```bash
-python LB.py
-```
-
-You'll be prompted to choose a mode:
-- `1` — CLI test mode (chat in your terminal)
-- `2` — Flask webhook mode (LINE bot)
-- `3` — Both simultaneously
-
-Models are automatically loaded into LM Studio on startup if not already present.
-
-## Data Correction Commands (LINE)
-
-Users can correct their profile by sending messages starting with `更正`:
-
-| Command | Example |
-|---|---|
-| Full profile | `更正G(2)P(1)W(10)IsDad(False)Name(小美)` |
-| G/P only | `更正G(3)P(1)` |
-| Weeks only | `更正W(20)` |
-| Parent role | `更正IsDad(True)` |
-| Name only | `更正Name(小華)` |
-
-## Current Status and Limitations
-
-This repository reflects an academic prototype used for a poster presentation and technical demonstration. Current evaluation is preliminary and scenario-based. The system has not yet undergone large-scale user testing or clinical deployment.
-
-## Packaging (optional)
-
-```bash
-python -m PyInstaller --clean --onedir --console --name NTULineBot product_entry.py
-```
-
-## License
-
-This project is intended for academic and clinical education use at NTU Hospital.
+Educational prototype. It does not replace professional medical advice.

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="admin-token" content="__TOKEN__">
+<title>產前衛教機器人 管理介面</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1c2430;--mute:#64707f;--line:#e2e6ec;--accent:#1f6f6b;--accent-ink:#fff;--ok:#1d7a46;--warn:#a35f00;--bad:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#12171d;--card:#1b222b;--ink:#e6ebf1;--mute:#93a0af;--line:#2a343f;--accent:#58b5ae;--accent-ink:#06201e;--ok:#5ec98a;--warn:#e6a543;--bad:#ff8a80}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+h1{font-size:17px;margin:0 8px 0 0}nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{background:none;border:0;padding:8px 12px;border-radius:8px;color:var(--mute);font:inherit;cursor:pointer}
+nav button[aria-current=true]{background:var(--accent);color:var(--accent-ink)}
+main{max-width:1000px;margin:0 auto;padding:20px}section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+h2{font-size:16px;margin:0 0 10px}.mute{color:var(--mute)}.small{font-size:13px}
+button.p,button.s,button.d{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);cursor:pointer;background:var(--card);color:var(--ink)}
+button.p{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}button.d{color:var(--bad)}
+button:disabled{opacity:.5;cursor:default}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:var(--mute)}.ok{background:var(--ok)}.warn{background:var(--warn)}.bad{background:var(--bad)}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mute);font-weight:500;font-size:13px}
+tr.click{cursor:pointer}tr.click:hover{background:var(--bg)}
+input,select,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);width:100%}
+label{display:block;margin:10px 0 4px;font-size:13px;color:var(--mute)}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.msg{padding:8px 12px;border-radius:12px;margin:6px 0;max-width:85%;white-space:pre-wrap}.msg.user{background:var(--accent);color:var(--accent-ink);margin-left:auto}.msg.bot{background:var(--bg);border:1px solid var(--line)}
+.chat{height:380px;overflow:auto;padding:4px}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--accent);width:0}
+pre{background:var(--bg);padding:12px;border-radius:8px;overflow:auto;max-height:420px;font-size:12px}
+.banner{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:color-mix(in srgb,var(--warn) 15%,transparent);border:1px solid var(--warn)}
+details{margin-top:12px}summary{cursor:pointer;color:var(--mute)}
+</style>
+</head>
+<body>
+<header>
+  <h1>產前衛教機器人</h1>
+  <nav id="nav"></nav>
+  <span style="flex:1"></span><span id="life" class="small mute"></span>
+</header>
+<main>
+<section id="home">
+  <div id="problems"></div>
+  <div class="card row"><button class="p" id="toggle"></button><span class="mute small" id="toggleHint"></span></div>
+  <div class="grid" id="cards"></div>
+  <div class="card"><h2>啟用前檢查</h2><div id="checklist"></div></div>
+  <div class="card"><h2>維護</h2><div class="row">
+    <a href="/api/backup"><button class="s">下載備份（資料庫＋知識庫文件）</button></a>
+    <button class="d" id="quit">關閉程式</button></div>
+    <p class="small mute">備份檔含 LINE 金鑰與使用者資料，請妥善保管。</p></div>
+</section>
+
+<section id="users"><div class="card"><div class="row"><input id="uq" placeholder="搜尋姓名或 ID" style="max-width:280px"><span class="mute small" id="ucount"></span></div>
+  <table><thead><tr><th>姓名</th><th>身分</th><th>孕週</th><th>G/P</th><th>狀態</th><th>訊息</th><th>最後上線</th></tr></thead><tbody id="utable"></tbody></table></div>
+  <div id="udetail"></div></section>
+
+<section id="unans"><div class="card"><h2>機器人答不出來的問題</h2><p class="mute small">這些問題在知識庫中找不到相關內容。補上衛教文件並重建後即可回答。</p>
+  <table><thead><tr><th>時間</th><th>使用者</th><th>問題</th><th>原因</th></tr></thead><tbody id="utab"></tbody></table></div></section>
+
+<section id="kb"><div id="kbwarn"></div>
+  <div class="card"><h2>衛教文件</h2><div class="row"><input type="file" id="kfile" multiple accept=".pdf,.txt,.md" style="max-width:360px"><button class="s" id="kup">上傳</button>
+  <button class="p" id="krebuild">重建知識庫</button></div>
+  <div id="kprog" style="margin:12px 0"></div>
+  <table><thead><tr><th>文件</th><th>大小</th><th>段落數</th><th></th></tr></thead><tbody id="ktable"></tbody></table></div></section>
+
+<section id="test"><div class="card"><h2>測試對話</h2><p class="mute small">以測試身分與機器人對話，不會傳到 LINE。第一次會先請您填寫基本資料。</p>
+  <div class="chat" id="chat"></div><div class="row" style="margin-top:8px"><input id="ctext" placeholder="輸入訊息" style="flex:1"><button class="p" id="csend">送出</button><button class="s" id="creset">重新開始</button></div></div></section>
+
+<section id="settings"><div id="sform"></div><div class="row"><button class="p" id="ssave">儲存設定</button><span id="sstate" class="small mute"></span></div>
+  <p class="small mute">變更埠號、模型與通道設定後，請按「停止」再「啟動」才會生效。</p></section>
+
+<section id="logs"><div class="card"><div class="row"><h2 style="margin:0;flex:1">執行記錄</h2><button class="s" id="lref">重新整理</button></div><pre id="lpre"></pre></div></section>
+</main>
+<script>
+const TOKEN=document.querySelector('meta[name=admin-token]').content;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(path,opt={}){
+  opt.headers=Object.assign({'X-Admin-Token':TOKEN},opt.headers||{});
+  if(opt.json!==undefined){opt.method=opt.method||'POST';opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(opt.json)}
+  const r=await fetch(path,opt); if(!r.ok) throw new Error(r.status); return r.json();
+}
+const TABS=[['home','總覽'],['users','使用者'],['unans','待補充問題'],['kb','知識庫'],['test','測試對話'],['settings','設定'],['logs','記錄']];
+let tab='home',st=null;
+$('#nav').innerHTML=TABS.map(([k,l])=>`<button data-t="${k}">${l}</button>`).join('');
+$('#nav').onclick=e=>{const t=e.target.dataset.t;if(t)show(t)};
+function show(t){tab=t;document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id===t));
+  document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.t===t));
+  ({home:refresh,users:loadUsers,unans:loadUnans,kb:loadKb,settings:loadSettings,logs:loadLogs,test:()=>{}})[t]();}
+const dot=(c)=>`<span class="dot ${c}"></span>`;
+const LIFE={stopped:'已停止',starting:'啟動中',running:'運作中',stopping:'停止中'};
+async function refresh(){
+  st=await api('/api/status'); const running=st.life==='running';
+  $('#life').innerHTML=dot(running?'ok':'')+LIFE[st.life];
+  $('#toggle').textContent=running?'停止機器人':'啟動機器人'; $('#toggle').className=running?'s':'p';
+  $('#toggleHint').textContent=running?'LINE 訊息會由本機處理':'停止中，不會回覆 LINE 訊息';
+  $('#problems').innerHTML=Object.values(st.problems||{}).map(p=>`<div class="banner">${esc(p)}</div>`).join('');
+  const t=st.tunnel,l=st.llm,k=st.kb;
+  $('#cards').innerHTML=[
+   ['LINE 連線',st.line.configured?(t.state==='up'&&t.webhook_ok?'ok':t.state==='failed'?'bad':'warn'):'bad',
+     !st.line.configured?'尚未設定金鑰':t.state==='up'?(t.webhook_ok?'Webhook 已連線':'已設定，LINE 驗證未通過'):t.message||'未啟動'],
+   ['語言模型',l.chat_ready?'ok':running?'warn':'',l.chat_ready?'已就緒':running?'載入中…':'未啟動'],
+   ['檢索模型',l.embed_ready?'ok':running?'warn':'',l.embed_ready?'已就緒':running?'載入中…':'未啟動'],
+   ['知識庫',k.ready&&!k.embed_mismatch?'ok':'warn',k.ready?`${k.vectors} 段，${k.docs.length} 份文件`:'尚未建立'],
+   ['使用者',st.counts.users?'ok':'',`${st.counts.users} 位`],
+   ['待補充問題',st.counts.unanswered?'warn':'ok',`${st.counts.unanswered} 則`]
+  ].map(([n,c,s])=>`<div class="card" style="margin:0"><div class="mute small">${n}</div><div>${dot(c)}${esc(s)}</div></div>`).join('');
+  const chk=[[st.line.configured,'填寫 LINE Channel Access Token 與 Secret（設定頁）'],
+   [l.server_found,'放入 llama-server 程式（bin 資料夾）'],[l.chat_model,'放入對話模型 .gguf（models 資料夾）'],
+   [l.embed_model,'放入檢索模型 .gguf（models 資料夾，檔名含 embed 或 bge）'],
+   [k.ready&&!k.embed_mismatch,'建立知識庫（知識庫頁，按「重建知識庫」）'],[st.cloudflared_found,'放入 cloudflared（bin 資料夾），用於讓 LINE 連到本機']];
+  $('#checklist').innerHTML=chk.map(([ok,t])=>`<div>${dot(ok?'ok':'bad')}${esc(t)}</div>`).join('');
+}
+$('#toggle').onclick=async()=>{$('#toggle').disabled=true;await api(st.life==='running'?'/api/stop':'/api/start',{method:'POST'});$('#toggle').disabled=false;refresh()};
+$('#quit').onclick=async()=>{if(confirm('確定關閉程式？機器人將停止回覆。')){await api('/api/quit',{method:'POST'});document.body.innerHTML='<p style="padding:40px">程式已關閉，可關閉此視窗。</p>'}};
+const ago=t=>{const s=Date.now()/1000-t;return s<90?'剛剛':s<5400?Math.round(s/60)+' 分鐘前':s<172800?Math.round(s/3600)+' 小時前':Math.round(s/86400)+' 天前'};
+async function loadUsers(){
+  const r=await api('/api/users?q='+encodeURIComponent($('#uq').value));
+  $('#ucount').textContent=r.users.length+' 位';
+  $('#utable').innerHTML=r.users.map(u=>`<tr class="click" data-id="${esc(u.user_id)}"><td>${esc(u.name||'（未填）')}</td><td>${u.is_dad==null?'-':u.is_dad?'準爸爸':'準媽媽'}</td><td>${u.weeks??'-'}</td><td>${u.g==null?'-':'G'+u.g+'P'+u.p}</td><td>${u.state==='active'?'已完成':'填資料中'}</td><td>${u.n_msgs}</td><td>${ago(u.last_seen)}</td></tr>`).join('')||'<tr><td colspan=7 class="mute">尚無使用者</td></tr>';
+}
+$('#uq').oninput=loadUsers;
+$('#utable').onclick=e=>{const tr=e.target.closest('tr[data-id]');if(tr)openUser(tr.dataset.id)};
+async function openUser(id){
+  const {user:u,messages}=await api('/api/users/'+encodeURIComponent(id));
+  $('#udetail').innerHTML=`<div class="card"><h2>${esc(u.name||'（未填）')} <span class="mute small">${esc(u.user_id)}</span></h2>
+  <div class="grid"><div><label>姓名</label><input id="e_name" value="${esc(u.name)}"></div>
+  <div><label>身分</label><select id="e_dad"><option value="">未知</option><option value="0" ${u.is_dad===0?'selected':''}>準媽媽</option><option value="1" ${u.is_dad===1?'selected':''}>準爸爸</option></select></div>
+  <div><label>孕週</label><input id="e_w" type="number" min="0" max="42" value="${u.weeks??''}"></div>
+  <div><label>懷孕次數 G</label><input id="e_g" type="number" min="0" value="${u.g??''}"></div>
+  <div><label>生產次數 P</label><input id="e_p" type="number" min="0" value="${u.p??''}"></div></div>
+  <div class="row" style="margin-top:12px"><button class="p" id="e_save">儲存</button><button class="d" id="e_del">刪除此使用者與對話</button></div>
+  <h2 style="margin-top:16px">對話記錄</h2><div class="chat">${messages.map(m=>`<div class="msg ${m.role}">${esc(m.text)}</div>`).join('')||'<span class="mute">無</span>'}</div></div>`;
+  $('#e_save').onclick=async()=>{await api('/api/users/'+encodeURIComponent(id),{method:'PUT',json:{name:$('#e_name').value,is_dad:$('#e_dad').value===''?null:+$('#e_dad').value,weeks:$('#e_w').value,g:$('#e_g').value,p:$('#e_p').value}});loadUsers();openUser(id)};
+  $('#e_del').onclick=async()=>{if(confirm('刪除後無法復原，確定？')){await api('/api/users/'+encodeURIComponent(id),{method:'DELETE'});$('#udetail').innerHTML='';loadUsers()}};
+  $('#udetail').scrollIntoView({behavior:'smooth'});
+}
+async function loadUnans(){const r=await api('/api/unanswered');
+  $('#utab').innerHTML=r.items.map(i=>`<tr><td class="small">${ago(i.ts)}</td><td>${esc(i.name||i.user_id.slice(0,8))}</td><td>${esc(i.text)}</td><td>${i.flag==='no_data'?'知識庫無相關內容':'系統錯誤'}</td></tr>`).join('')||'<tr><td colspan=4 class="mute">目前沒有</td></tr>'}
+let kbTimer=null;
+async function loadKb(){
+  const k=await api('/api/kb'); const b=k.build;
+  $('#kbwarn').innerHTML=(k.embed_mismatch?`<div class="banner">檢索模型已更換（索引建立時：${esc(k.built_with)}），請重建知識庫，否則搜尋結果會不準。</div>`:'')+
+    (k.empty.length?`<div class="banner">以下文件讀不到文字（可能是掃描檔），機器人無法使用：${esc(k.empty.join('、'))}。請改用可複製文字的 PDF。</div>`:'')+
+    (k.pending.length&&b.state!=='running'?`<div class="banner">有 ${k.pending.length} 份新文件尚未納入：${esc(k.pending.join('、'))}。請按「重建知識庫」。</div>`:'');
+  $('#kprog').innerHTML=b.state==='running'?`<div class="bar"><i style="width:${b.total?Math.round(100*b.done/b.total):5}%"></i></div><div class="small mute">${esc(b.message)} ${b.done}/${b.total}</div>`:(b.message?`<div class="small ${b.state==='failed'?'':'mute'}">${b.state==='failed'?'失敗：':''}${esc(b.message)}</div>`:'');
+  $('#krebuild').disabled=b.state==='running';
+  $('#ktable').innerHTML=k.docs.map(d=>`<tr><td>${esc(d.name)}</td><td>${(d.size/1048576).toFixed(1)} MB</td><td>${d.chunks||'<span class="mute">未建立</span>'}</td><td><button class="d" data-del="${esc(d.name)}">刪除</button></td></tr>`).join('')||'<tr><td colspan=4 class="mute">尚無文件</td></tr>';
+  clearTimeout(kbTimer); if(b.state==='running'&&tab==='kb') kbTimer=setTimeout(loadKb,1000);
+}
+$('#kup').onclick=async()=>{const f=$('#kfile').files;if(!f.length)return;const fd=new FormData();for(const x of f)fd.append('files',x);
+  const r=await api('/api/kb/upload',{method:'POST',body:fd});if(r.errors.length)alert(r.errors.join('\n'));$('#kfile').value='';loadKb()};
+$('#krebuild').onclick=async()=>{await api('/api/kb/rebuild',{method:'POST'});loadKb()};
+$('#ktable').onclick=async e=>{const n=e.target.dataset.del;if(n&&confirm('刪除「'+n+'」？需重建知識庫才會生效。')){await api('/api/kb/doc?name='+encodeURIComponent(n),{method:'DELETE'});loadKb()}};
+const addMsg=(r,t)=>{$('#chat').insertAdjacentHTML('beforeend',`<div class="msg ${r}">${esc(t)}</div>`);$('#chat').scrollTop=1e9};
+async function send(){const t=$('#ctext').value.trim();if(!t)return;$('#ctext').value='';addMsg('user',t);$('#csend').disabled=true;
+  try{addMsg('bot',(await api('/api/chat',{json:{text:t}})).reply)}catch(e){addMsg('bot','（錯誤）')}$('#csend').disabled=false;$('#ctext').focus()}
+$('#csend').onclick=send;$('#ctext').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing)send()};
+$('#creset').onclick=async()=>{await api('/api/chat/reset',{method:'POST'});$('#chat').innerHTML=''};
+const GROUPS=[['LINE',[['line_channel_access_token','Channel Access Token','secret'],['line_channel_secret','Channel Secret','secret'],['line_notify_user_ids','啟動時通知的 LINE User ID（逗號分隔）']]],
+ ['緊急狀況（可由護理人員調整）',[['emergency_keywords','觸發關鍵字（逗號分隔）','area'],['emergency_reply','緊急回覆內容','area']]],
+ ['進階：模型與連接埠',[['llm_mode','模型來源','sel:managed=由本程式啟動 llama.cpp;external=外部 OpenAI 相容服務'],['chat_model_path','對話模型（留空自動選擇）','model'],['embed_model_path','檢索模型（留空自動選擇）','model'],['llm_ctx','上下文長度'],['llm_gpu_layers','GPU 層數（0＝僅 CPU）'],['webhook_port','Webhook 連接埠'],['ui_port','管理介面連接埠'],['external_chat_url','外部服務網址（對話）'],['external_embed_url','外部服務網址（檢索）'],['chat_model_name','外部對話模型名稱'],['embed_model_name','外部檢索模型名稱'],['llama_server_path','llama-server 路徑（留空自動尋找）']]],
+ ['進階：回答行為',[['top_k','參考段落數'],['max_distance','相關度門檻（越小越嚴格）'],['max_tokens','回答長度上限'],['temperature','溫度'],['history_turns','帶入的對話輪數'],['autostart','開啟程式時自動啟動','sel:true=是;false=否'],['tunnel_enabled','自動建立 Cloudflare 通道','sel:true=是;false=否']]]];
+async function loadSettings(){const r=await api('/api/settings');const s=r.settings;
+  $('#sform').innerHTML=GROUPS.map(([g,fs],i)=>{const body=fs.map(([k,l,t])=>{t=t||'';let inp;
+    if(t==='area')inp=`<textarea data-k="${k}" rows="3">${esc(s[k])}</textarea>`;
+    else if(t.startsWith('sel:'))inp=`<select data-k="${k}">${t.slice(4).split(';').map(o=>{const[v,n]=o.split('=');return`<option value="${v}" ${s[k]===v?'selected':''}>${esc(n)}</option>`}).join('')}</select>`;
+    else if(t==='model')inp=`<select data-k="${k}"><option value="">自動</option>${r.models.map(m=>`<option ${s[k].endsWith(m)?'selected':''} value="${esc(m)}">${esc(m)}</option>`).join('')}</select>`;
+    else if(t==='secret')inp=`<input data-k="${k}" type="password" placeholder="${s[k+'_set']?'已設定（留空表示不變更）':'尚未設定'}" autocomplete="off">`;
+    else inp=`<input data-k="${k}" value="${esc(s[k])}">`;
+    return`<label>${l}</label>${inp}`}).join('');
+    const extra=i===0?'<div class="row" style="margin-top:10px"><button class="s" id="ltest">測試 LINE 連線</button><span id="lres" class="small"></span></div>':'';
+    return i>=2?`<details class="card"><summary>${g}</summary>${body}</details>`:`<div class="card"><h2>${g}</h2>${body}${extra}</div>`}).join('');
+  $('#ltest').onclick=async()=>{const r=await api('/api/line/test',{method:'POST'});$('#lres').textContent=r.ok?'成功：'+r.name:'失敗，請檢查 Token（先儲存設定）'};
+}
+$('#ssave').onclick=async()=>{const d={};document.querySelectorAll('[data-k]').forEach(e=>{d[e.dataset.k]=e.value});
+  const model_keys=['chat_model_path','embed_model_path'];model_keys.forEach(k=>{if(d[k])d[k]='models/'+d[k]});
+  await api('/api/settings',{method:'PUT',json:d});$('#sstate').textContent='已儲存';setTimeout(()=>$('#sstate').textContent='',2500)};
+async function loadLogs(){const r=await api('/api/logs');$('#lpre').textContent=r.lines.join('\n');$('#lpre').scrollTop=1e9}
+$('#lref').onclick=loadLogs;
+setInterval(()=>{if(tab==='home')refresh().catch(()=>{})},3000);
+show('home');
+</script>
+</body>
+</html>
