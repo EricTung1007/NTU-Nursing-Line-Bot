@@ -95,7 +95,7 @@ class NursePractitioner:
     def __init__(self, rt: "Runtime"):
         self.rt = rt
         self.s = rt.settings
-        self._job = {"running": False, "log": [], "done": True}
+        self._job = {"running": False, "log": [], "done": True, "progress": ""}
         self._job_lock = threading.Lock()
 
     # ====================================================================== checks
@@ -182,17 +182,16 @@ class NursePractitioner:
                 out.append(Check("llama_server", "ok", ("llama-server 已就緒", "llama-server found")))
             else:
                 out.append(Check("llama_server", "bad", ("找不到 llama-server（語言模型引擎）", "llama-server (the model engine) not found"),
-                                 steps=[("按「自動修復」，程式會在「下載」「桌面」「文件」資料夾找找看。", "Try Auto-fix: it searches Downloads, Desktop and Documents."),
+                                 steps=[("按「自動準備檔案」，程式會先在「下載」「桌面」「文件」找，找不到就自己上網下載（需要網路）。", "Press Set up files: it searches Downloads, Desktop and Documents, then downloads what is missing (needs internet)."),
                                         (f"還是找不到：到 {LLAMA_RELEASES} 下載（Windows 選檔名含 win 與 cpu 的 zip；Mac 選含 macos-arm64 的 zip，實際檔名會隨版本不同）。",
                                          f"Otherwise download from {LLAMA_RELEASES} (Windows: zip with win and cpu in the name; Mac: macos-arm64)."),
                                         ("解壓縮後，把裡面「所有檔案」放進本程式的 bin 資料夾。", "Unzip and put ALL the files into this program's bin folder.")],
-                                 fix="locate_files", fix_label=("自動尋找檔案", "Search for files")))
+                                 fix="locate_files", fix_label=("自動準備檔案", "Set up files")))
         from .tunnel import find_cloudflared
         if self.s.bool("tunnel_enabled") and not find_cloudflared():
             out.append(Check("cloudflared", "bad", ("找不到 cloudflared（讓 LINE 連到本機的工具）", "cloudflared (links LINE to this computer) not found"),
-                             steps=[("按「自動尋找檔案」，或把 cloudflared（Windows 為 cloudflared.exe）放進 bin 資料夾。",
-                                     "Press Search for files, or put cloudflared (cloudflared.exe on Windows) into the bin folder.")],
-                             fix="locate_files", fix_label=("自動尋找檔案", "Search for files")))
+                             steps=[("按「自動準備檔案」，程式會自己下載。", "Press Set up files; the program downloads it itself.")],
+                             fix="locate_files", fix_label=("自動準備檔案", "Set up files")))
         return out
 
     def _models(self) -> List[Check]:
@@ -211,8 +210,8 @@ class NursePractitioner:
                 hint = ("檔名需含 embed 或 bge（例如 bge-small-zh-v1.5-f16.gguf）。", "File name must contain embed or bge.") if kind == "embed" \
                     else ("放入任何不含 embed／bge 字樣的 .gguf 檔。", "Any .gguf file without embed/bge in its name.")
                 out.append(Check(f"model_{kind}", "bad", (f"找不到{zh}", f"No {en} found"),
-                                 steps=[("按「自動尋找檔案」，或手動把 .gguf 檔放進 models 資料夾。", "Press Search for files, or put the .gguf into the models folder."), hint],
-                                 fix="locate_files", fix_label=("自動尋找檔案", "Search for files")))
+                                 steps=[("按「自動準備檔案」，程式會自己下載模型（約 2.7 GB，需要網路）。", "Press Set up files; the program downloads the model (about 2.7 GB, needs internet).")],
+                                 fix="locate_files", fix_label=("自動準備檔案", "Set up files")))
         return out
 
     def _processes(self) -> List[Check]:
@@ -261,6 +260,9 @@ class NursePractitioner:
         elif k["embed_mismatch"]:
             out.append(Check("kb", "bad", ("檢索模型已更換，知識庫需重建", "Embedding model changed; the knowledge base must be rebuilt"),
                              (f"索引是用 {k['built_with']} 建的", f"Index was built with {k['built_with']}"), fix="rebuild_kb"))
+        elif k["legacy"]:
+            out.append(Check("kb", "warn", ("知識庫是舊版索引，建議用目前的檢索模型重建", "Knowledge base is a legacy index; rebuild it with the current embedding model"),
+                             fix="rebuild_kb", fix_label=("重建知識庫", "Rebuild")))
         elif k["pending"]:
             out.append(Check("kb", "warn", (f"有 {len(k['pending'])} 份新文件尚未納入知識庫", f"{len(k['pending'])} new document(s) not yet indexed"),
                              ("、".join(k["pending"]), ", ".join(k["pending"])), fix="rebuild_kb", fix_label=("重建知識庫", "Rebuild")))
@@ -444,7 +446,7 @@ class NursePractitioner:
                     self.s.update({f"{kind}_model_path": str(best)})
                     done_zh.append(best.name); done_en.append(best.name)
         if not done_zh:
-            return False, "在「下載」「桌面」「文件」找不到需要的檔案，請依步驟手動放入", "Found nothing in Downloads/Desktop/Documents; follow the steps to add the files"
+            return self._fix_download_components()  # nothing lying around: fetch it ourselves
         return True, "已設定：" + "、".join(done_zh), "Set up: " + ", ".join(done_en)
 
     @staticmethod
@@ -474,6 +476,14 @@ class NursePractitioner:
                     elif fl.endswith(".gguf"):
                         found["gguf"].append(p)
         return found
+
+    def _fix_download_components(self):
+        if not self.rt.installer.missing():
+            return True, "所需檔案都已就緒", "All required files are already in place"
+        started = self.rt.installer.start()
+        mb = self.rt.installer.status()["missing_mb"]
+        return True, ("開始下載所需檔案（約 %.1f GB），請保持網路連線" % (mb / 1000) if started else "已經在下載中"), \
+            ("Downloading required files (about %.1f GB); keep the network connected" % (mb / 1000) if started else "Download already running")
 
     def _fix_degrade_llm(self):
         """Out of memory: smaller context, CPU only, then restart."""
@@ -526,12 +536,22 @@ class NursePractitioner:
         with self._job_lock:
             if self._job["running"]:
                 return False
-            self._job = {"running": True, "log": [], "done": False}
+            self._job = {"running": True, "log": [], "done": False, "progress": ""}
         threading.Thread(target=self._fix_all, daemon=True, name="fix-all").start()
         return True
 
     def job(self) -> dict:
         return dict(self._job, log=list(self._job["log"]))
+
+    def _wait_download(self) -> None:
+        while self.rt.installer.status()["job"]["running"]:
+            j = self.rt.installer.status()["job"]
+            pct = int(100 * j["bytes"] / j["total"]) if j["total"] else 0
+            self._job["progress"] = f"下載中 {j['current']} {pct}% / Downloading {j['current']} {pct}%"
+            time.sleep(2)
+        self._job["progress"] = ""
+        err = self.rt.installer.status()["job"]["error"]
+        self._say(err if err else "檔案下載完成", err if err else "Downloads finished", not err)
 
     def _say(self, zh: str, en: str, ok: bool = True) -> None:
         self._job["log"].append({"zh": zh, "en": en, "ok": ok})
@@ -553,6 +573,8 @@ class NursePractitioner:
                             time.sleep(2)
                     ok, zh, en = self.fix(f)
                     self._say(zh, en, ok)
+                    if f == "locate_files" and self.rt.installer.status()["job"]["running"]:
+                        self._wait_download()
             left = [c for c in self.run() if c.level == "bad"]
             if left:
                 self._say(f"還有 {len(left)} 個問題需要您處理，請看下方步驟。", f"{len(left)} problem(s) need your action; see the steps below.", False)

@@ -100,6 +100,7 @@ class KnowledgeBase:
             "pending": [d["name"] for d in docs if d["chunks"] == 0 and d["name"] not in info.get("empty", [])],
             "embed_mismatch": bool(built_with and built_with != cur),
             "built_with": built_with or "未知（舊版索引）",
+            "legacy": bool(self.index_path.exists() and not self.info_path.exists()),
             "build": dict(self.build),
         }
 

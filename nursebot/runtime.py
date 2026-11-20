@@ -26,6 +26,7 @@ from .db import DB
 from .nurse_practitioner import NursePractitioner, explain_llama_log
 from .kb import KnowledgeBase
 from .line import LineClient
+from .components import Installer
 from .llm import LlamaServers, LlmClient, find_llama_server, resolve_model
 from .settings import Settings
 from .tunnel import Tunnel, find_cloudflared
@@ -57,6 +58,13 @@ class Runtime:
         self.started_at: Optional[float] = None
         self.incidents: deque = deque(maxlen=200)   # what the app noticed and did, for the debug page
         self.np = NursePractitioner(self)
+        ext = lambda: self.settings.get("llm_mode") == "external"  # noqa: E731
+        self.installer = Installer({
+            "llama": lambda: ext() or bool(find_llama_server(self.settings)),
+            "cloudflared": lambda: bool(find_cloudflared()),
+            "embed": lambda: ext() or bool(resolve_model(self.settings, "embed")),
+            "chat": lambda: ext() or bool(resolve_model(self.settings, "chat")),
+        })
         self._stop_sup = threading.Event()
         self._repair_log: Dict[str, List[float]] = {}
         self._http = None

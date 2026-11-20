@@ -20,14 +20,17 @@ LINE ──▶ Cloudflare 通道 ──▶ Webhook 伺服器 :5001（僅 /callba
 管理介面 :5050（僅限本機 127.0.0.1，不會經由通道對外）
 ```
 
-## 安裝與啟動
+## 下載（給護理人員與一般使用者）
+
+到專案的 **Releases** 頁面下載 `NTULineBot-Setup.exe`（Windows）或 `NTULineBot-mac.zip`（Mac）。安裝、開啟、按「一鍵修復」：程式會自己下載 llama.cpp、cloudflared 與模型（約 2.7 GB，可續傳並驗證檔案）。全程不需要終端機。安裝檔未經付費簽章，Windows 第一次會出現「其他資訊 → 仍要執行」；Mac 請按右鍵 → 打開。
+
+發行檔由 GitHub Actions 在推送 `v1.0.0` 這類標籤時自動建置。安裝後的使用者資料放在 `%LOCALAPPDATA%\NTULineBot`（macOS：`~/Library/Application Support/NTULineBot`），更新程式不會動到。
+
+## 從原始碼安裝
 
 1. 安裝 Python 3.9+，執行 `pip install -r requirements.txt`（若要原生視窗，再安裝 `requirements-gui.txt`）。
-2. 放入下列檔案（不在 git 中）：
-   - `bin/llama-server`（取自 [llama.cpp releases](https://github.com/ggml-org/llama.cpp/releases)，相依的 DLL 一併放在同資料夾）
-   - `bin/cloudflared`（已附 macOS arm64 版本）
-   - `models/` 內放對話模型與檢索模型的 `.gguf`（檢索模型檔名需含 `embed` 或 `bge`）
-3. 執行 `python app.py`。「總覽」頁會列出尚未完成的項目。
+2. 執行 `python app.py` 後按「一鍵修復」：缺少的 llama-server、cloudflared 與模型會自動尋找（下載、桌面、文件資料夾）或自動下載。也可以自己把檔案放進 `bin/` 與 `models/`（檢索模型檔名需含 `embed` 或 `bge`）。
+3. 「總覽」頁會列出尚未完成的項目。
 4. 「設定」頁貼上 LINE Channel Access Token 與 Secret；「知識庫」頁按「重建知識庫」。
 5. 按「啟動機器人」。通道網址會自動登錄到 LINE。
 

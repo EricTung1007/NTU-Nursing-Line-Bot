@@ -209,6 +209,14 @@ def create_admin_app(rt: Runtime, ring: RingHandler, on_quit: Callable[[], None]
     def np_job():
         return jsonify(rt.np.job())
 
+    @app.get("/api/components")
+    def components():
+        return jsonify(rt.installer.status())
+
+    @app.post("/api/components/install")
+    def components_install():
+        return jsonify(started=rt.installer.start())
+
     @app.get("/api/incidents")
     def incidents():
         return jsonify(items=list(rt.incidents)[::-1])

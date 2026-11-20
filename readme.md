@@ -33,14 +33,17 @@ Admin GUI :5050 (127.0.0.1 only, never exposed through the tunnel)
 | `nursebot/runtime.py` | Lifecycle, supervisor (auto-restart), incident log |
 | `nursebot/web/` | Admin GUI (API + single page) and the nurse note |
 
-## Setup
+## Download (for nurses and end users)
+
+Go to the repository's **Releases** page and download `NTULineBot-Setup.exe` (Windows) or `NTULineBot-mac.zip` (Mac). Install, open, press **Fix everything**: the app downloads llama.cpp, cloudflared and the models itself (about 2.7 GB, resumable, checksum-verified). No terminal at any point. The installer is unsigned, so Windows SmartScreen shows "More info, then Run anyway" once; on Mac use right-click, Open.
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`) when a tag such as `v1.0.0` is pushed. The Windows installer is made with Inno Setup (`packaging/installer.iss`) from a PyInstaller windowed build (`packaging/NTULineBot.spec`). Installed apps keep user data in `%LOCALAPPDATA%\NTULineBot` (macOS: `~/Library/Application Support/NTULineBot`), so upgrades never touch it.
+
+## Setup from source
 
 1. Python 3.9+, then `pip install -r requirements.txt` (add `requirements-gui.txt` for a native window).
-2. Put these files in place (not in git):
-   - `bin/llama-server` (from a [llama.cpp release](https://github.com/ggml-org/llama.cpp/releases); keep its DLLs/libs beside it)
-   - `bin/cloudflared` (a macOS arm64 build is already there)
-   - `models/<chat-model>.gguf` and `models/<embedding-model>.gguf` (the embedding file name should contain `embed` or `bge`; the first non-embedding `.gguf` is used for chat)
-3. `python app.py`. The Overview page shows a checklist of what is still missing.
+2. `python app.py`, then press **Fix everything**: missing llama-server, cloudflared and models are found (Downloads/Desktop/Documents) or downloaded automatically. You can also drop files into `bin/` and `models/` yourself (the embedding model file name should contain `embed` or `bge`).
+3. The Overview page lists anything still missing.
 4. Settings page: paste the LINE Channel Access Token and Secret. Knowledge Base page: press "Rebuild".
 5. Press "Start bot". The tunnel URL is registered with LINE automatically.
 

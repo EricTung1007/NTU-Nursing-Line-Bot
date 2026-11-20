@@ -55,6 +55,10 @@ details{margin-top:8px}summary{cursor:pointer;color:var(--mute)}
   <div id="problems"></div>
   <div class="card row"><button class="p" id="toggle"></button><span class="mute small" id="toggleHint"></span></div>
   <div class="grid" id="cards"></div>
+  <div class="card" id="setupcard" style="display:none"><h2>第一次使用：下載所需檔案 <span class="en" style="display:inline">First-time setup: download required files</span></h2>
+    <p class="small mute">程式會自己下載，不需要手動放檔案。需要網路；對話模型較大，請耐心等候，中斷後可續傳。 Everything downloads automatically and resumes if interrupted.</p>
+    <div id="setuplist"></div><div id="setupbar"></div>
+    <div class="row" style="margin-top:8px"><button class="p" id="setupgo">下載並安裝 Download &amp; install</button></div></div>
   <div class="card"><h2>需要處理的項目 <span class="en" style="display:inline">To do</span></h2><div id="checklist"></div></div>
   <div class="card"><h2>維護 <span class="en" style="display:inline">Maintenance</span></h2><div class="row">
     <a href="/api/backup"><button class="s">下載備份 Download backup</button></a>
@@ -136,12 +140,12 @@ document.addEventListener('click',async e=>{const f=e.target.closest('[data-fix]
 function flash(ok,zh,en){$('#fixlog').innerHTML=`<div class="banner" style="margin:0 0 8px;${ok?'':'border-color:var(--bad)'}">${esc(zh)} <span class="en" style="display:inline">${esc(en)}</span></div>`;setTimeout(()=>{if(!fixPoll)$('#fixlog').innerHTML=''},9000)}
 async function refreshLight(){
   try{const d=await api('/api/np');const s=d.summary;const c=s.bad?'bad':s.warn?'warn':'ok';
-    $('#light').className='light '+c;$('#lightTxt').textContent=c==='ok'?'一切正常 All good':c==='warn'?'請稍候或按一鍵修復 Wait or fix':'有問題，請按一鍵修復 Problem: press Fix';
+    $('#light').className='light '+c;$('#lightTxt').textContent=window._missing?'第一次使用：請按「一鍵修復」，程式會自動下載所需檔案 First run: press Fix everything to download what is needed':c==='ok'?'一切正常 All good':c==='warn'?'請稍候或按一鍵修復 Wait or fix':'有問題，請按一鍵修復 Problem: press Fix';
     $('#fixall').style.display=c==='ok'?'none':'';window._checks=d.checks;if(tab==='home')renderChecks($('#checklist'),d.checks,false)}catch(e){}}
 let fixPoll=null;
 $('#fixall').onclick=async()=>{$('#fixall').disabled=true;await api('/api/np/fix_all',{method:'POST'});
   fixPoll=setInterval(async()=>{const j=await api('/api/np/job');
-    $('#fixlog').innerHTML=`<div class="banner" style="margin:0 0 8px">${j.log.map(l=>`<div>${l.ok?'':'! '}${esc(l.zh)} <span class="en" style="display:inline">${esc(l.en)}</span></div>`).join('')||'檢查中… Checking…'}</div>`;
+    $('#fixlog').innerHTML=`<div class="banner" style="margin:0 0 8px">${j.progress?`<div><b>${esc(j.progress)}</b></div>`:''}${j.log.map(l=>`<div>${l.ok?'':'! '}${esc(l.zh)} <span class="en" style="display:inline">${esc(l.en)}</span></div>`).join('')||'檢查中… Checking…'}</div>`;
     if(j.done){clearInterval(fixPoll);fixPoll=null;$('#fixall').disabled=false;refreshLight();show(tab);setTimeout(()=>{if(!fixPoll)$('#fixlog').innerHTML=''},15000)}},1500)};
 
 /* ---------- overview ---------- */
@@ -160,8 +164,20 @@ async function refresh(){
    ['使用者',st.counts.users?'ok':'',`${st.counts.users} 位`],
    ['待補充問題',st.counts.unanswered?'warn':'ok',`${st.counts.unanswered} 則`]
   ].map(([n,c,s])=>`<div class="card" style="margin:0"><div class="mute small">${n}</div><div>${dot(c)}${esc(s)}</div></div>`).join('');
-  refreshLight();
+  refreshLight();loadSetup();
 }
+const MB=n=>n>=1000?(n/1000).toFixed(1)+' GB':n+' MB';
+let setupTimer=null;
+async function loadSetup(){
+  const c=await api('/api/components');const miss=c.items.filter(i=>!i.present);window._missing=miss.length;
+  $('#setupcard').style.display=miss.length||c.job.running?'':'none';
+  $('#setuplist').innerHTML=c.items.map(i=>`<div class="chk">${dot(i.present?'ok':c.job.current===i.id?'warn':'bad')}<div>${esc(i.zh)}<span class="en">${esc(i.en)}</span></div><span class="small mute">${MB(i.mb)}</span></div>`).join('');
+  const j=c.job,pct=j.total?Math.round(100*j.bytes/j.total):0;
+  $('#setupbar').innerHTML=j.running?`<div class="bar"><i style="width:${pct}%"></i></div><div class="small mute">${pct}% (${MB(Math.round(j.bytes/1e6))} / ${MB(Math.round(j.total/1e6))})</div>`:(j.error?`<div class="banner" style="margin-top:8px">${esc(j.error)}</div>`:'');
+  $('#setupgo').disabled=j.running;$('#setupgo').textContent=j.running?'下載中… Downloading…':'下載並安裝 Download & install ('+MB(c.missing_mb)+')';
+  clearTimeout(setupTimer);if(j.running&&tab==='home')setupTimer=setTimeout(()=>{loadSetup().then(()=>refreshLight())},1500);
+}
+$('#setupgo').onclick=async()=>{await api('/api/components/install',{method:'POST'});loadSetup()};
 $('#toggle').onclick=async()=>{$('#toggle').disabled=true;await api(st.life==='running'?'/api/stop':'/api/start',{method:'POST'});$('#toggle').disabled=false;refresh()};
 $('#quit').onclick=async()=>{if(confirm('確定關閉程式？機器人將停止回覆。 Quit? The bot will stop replying.')){await api('/api/quit',{method:'POST'});document.body.innerHTML='<p style="padding:40px">程式已關閉，可關閉此視窗。 Closed; you can close this window.</p>'}};
 

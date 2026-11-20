@@ -1,0 +1,68 @@
+name: build-release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install build dependencies
+        run: pip install -r requirements.txt -r requirements-gui.txt pyinstaller pytest
+      - name: Run tests
+        run: python -m pytest -q tests
+      - name: Build windowed app (no console)
+        run: pyinstaller --clean --noconfirm packaging/NTULineBot.spec
+      - name: Build installer
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $v = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "0.0.0" }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" packaging\installer.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/NTULineBot-Setup.exe
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install build dependencies
+        run: pip install -r requirements.txt -r requirements-gui.txt pyinstaller pytest
+      - name: Run tests
+        run: python -m pytest -q tests
+      - name: Build app bundle
+        run: |
+          pyinstaller --clean --noconfirm packaging/NTULineBot.spec
+          ditto -c -k --sequesterRsrc --keepParent dist/NTULineBot.app dist/NTULineBot-mac.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-app
+          path: dist/NTULineBot-mac.zip
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" out/* --repo "${{ github.repository }}" --generate-notes --title "${{ github.ref_name }}"

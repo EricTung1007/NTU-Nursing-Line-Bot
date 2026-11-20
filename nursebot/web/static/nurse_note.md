@@ -29,14 +29,16 @@
 | 通道正常但收不到訊息 | LINE 後台設定 | 照「除錯」頁的 4 個步驟檢查 |
 | 機器人說「沒有相關資料」 | 知識庫沒有這個主題 | 看「待補充問題」，補文件後重建 |
 
-## 第一次安裝（只做一次）
+## 第一次安裝（只做一次，不需要任何指令）
 
-1. 把整個程式資料夾放到「文件」或桌面（不要放在 Program Files）。
-2. 把下列檔案放進去：`bin` 資料夾放 **llama-server** 與 **cloudflared**；`models` 資料夾放兩個 **.gguf** 模型檔（檢索模型的檔名要有 `embed` 或 `bge`）。
-   - 不確定放哪裡？先把檔案放在「下載」資料夾，再按「一鍵修復」，程式會自己找。
-3. 到「設定」→「LINE 連線」貼上 **Channel Access Token** 與 **Channel Secret**，按「測試 LINE 連線」。
-4. 按「一鍵修復」。程式會建立知識庫並啟動機器人。
-5. 到「測試對話」傳一句話試試，沒問題就完成了。
+1. 到專案的 GitHub「Releases」頁，下載 **NTULineBot-Setup.exe**（Windows）或 **NTULineBot-mac.zip**（Mac）。
+2. **Windows**：雙擊 Setup，一路按「下一步」。第一次可能出現藍色「Windows 已保護您的電腦」：按「**其他資訊**」→「**仍要執行**」（因為程式沒有付費簽章，這是正常的）。**Mac**：解壓縮後拖到「應用程式」，第一次要**按右鍵 → 打開**。
+3. 開啟「NTU Nursing LINE Bot」。畫面最上方會寫「第一次使用」，按 **「一鍵修復」**，程式會自己下載所需檔案（約 2.7 GB，需要網路，中斷後會接著下載）。
+4. 到「設定」→「LINE 連線」貼上 **Channel Access Token** 與 **Channel Secret**，按「測試 LINE 連線」。
+5. 再按一次「一鍵修復」。程式會建立知識庫並啟動機器人。
+6. 到「測試對話」傳一句話試試，沒問題就完成了。
+
+> 更新程式：下載新版 Setup 再安裝一次即可，資料與設定都會保留。
 
 ## 每週與每月
 
@@ -48,7 +50,7 @@
 
 - 機器人**只能提供一般衛教**，不能取代護理人員或醫師的判斷。使用者描述緊急症狀時，機器人會立刻請對方就醫並提供電話。
 - 使用者的對話含個人資料，**備份檔請妥善保管**，不要寄到公開的地方。
-- 不要刪除程式資料夾裡的 `data` 資料夾，那是所有使用者資料。
+- 使用者資料存放在電腦的使用者資料夾（Windows：`%LOCALAPPDATA%\NTULineBot`；Mac：`資源庫/Application Support/NTULineBot`），解除安裝不會刪除；請勿手動刪除。
 
 <!--EN-->
 
@@ -83,14 +85,16 @@ This program is the ward's education helper: mothers and families ask questions 
 | Tunnel OK but no messages | LINE console settings | Follow the 4 steps on the Debug page |
 | Bot says "no relevant data" | Topic not in the knowledge base | See "Unanswered questions", add a document, rebuild |
 
-## First-time setup (once)
+## First-time setup (once, no commands)
 
-1. Put the whole program folder in Documents or on the Desktop (not Program Files).
-2. Add these files: in `bin` put **llama-server** and **cloudflared**; in `models` put two **.gguf** model files (the embedding model's name must contain `embed` or `bge`).
-   - Not sure where? Put them in Downloads, then press **Fix everything**; the program finds them itself.
-3. Settings → LINE connection: paste the **Channel Access Token** and **Channel Secret**, press "Test LINE connection".
-4. Press **Fix everything**. It builds the knowledge base and starts the bot.
-5. Send a line in "Test chat". If it answers, you are done.
+1. On the project's GitHub **Releases** page, download **NTULineBot-Setup.exe** (Windows) or **NTULineBot-mac.zip** (Mac).
+2. **Windows**: double-click Setup and keep pressing Next. The first time you may see a blue "Windows protected your PC" box: press **More info** then **Run anyway** (the program has no paid signature; this is expected). **Mac**: unzip, drag to Applications, and the first time **right-click, then Open**.
+3. Open "NTU Nursing LINE Bot". The top says "First run"; press **Fix everything** and the program downloads what it needs (about 2.7 GB, needs internet, resumes if interrupted).
+4. Settings → LINE connection: paste the **Channel Access Token** and **Channel Secret**, press "Test LINE connection".
+5. Press **Fix everything** again. It builds the knowledge base and starts the bot.
+6. Send a line in "Test chat". If it answers, you are done.
+
+> To update: download the new Setup and install it again. Your data and settings are kept.
 
 ## Weekly and monthly
 
@@ -102,4 +106,4 @@ This program is the ward's education helper: mothers and families ask questions 
 
 - The bot gives **general education only** and does not replace a nurse's or doctor's judgement. If a user describes an emergency, the bot tells them to seek care immediately and gives the phone numbers.
 - Conversations contain personal data. **Keep backup files safe** and never post them publicly.
-- Never delete the `data` folder inside the program folder; it holds all user data.
+- User data is kept in the computer's user-data folder (Windows: `%LOCALAPPDATA%\NTULineBot`; Mac: `Library/Application Support/NTULineBot`). Uninstalling does not delete it; do not delete it by hand.

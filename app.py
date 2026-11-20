@@ -58,7 +58,8 @@ def main() -> int:
     rt = Runtime(db)
     existing = already_running(rt.settings.int("ui_port"))
     if existing:
-        webbrowser.open(existing)  # one copy only: just bring up the existing window
+        if "--no-open" not in sys.argv:
+            webbrowser.open(existing)  # one copy only: just bring up the existing window
         return 0
     rt.settings.import_env(paths.APP_DIR / ".env")   # old deployments keep their LINE credentials
     migrate_memory(db, paths.APP_DIR / "memory_data")  # old per-user txt files -> SQLite (once)
@@ -84,18 +85,24 @@ def main() -> int:
         threading.Thread(target=rt.start, daemon=True, name="autostart").start()
 
     window = None
-    if "--browser" not in sys.argv:
+    if "--browser" not in sys.argv and "--no-open" not in sys.argv:
         try:
             import webview  # optional: pip install pywebview
             window = webview
         except ImportError:
             window = None
     try:
+        started = False
         if window:
-            window.create_window("產前衛教機器人", url, width=1120, height=800)
-            window.start()  # blocks until the window is closed
-        else:
-            webbrowser.open(url)
+            try:
+                window.create_window("產前衛教機器人", url, width=1120, height=800)
+                window.start()  # blocks until the window is closed
+                started = True
+            except Exception:  # e.g. WebView2 missing on an old Windows: fall back to the browser
+                logging.getLogger("app").exception("native window unavailable, using the browser")
+        if not started:
+            if "--no-open" not in sys.argv:  # --no-open: headless (tests, servers)
+                webbrowser.open(url)
             quit_event.wait()
     except KeyboardInterrupt:
         pass

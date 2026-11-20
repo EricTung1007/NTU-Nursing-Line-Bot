@@ -13,7 +13,8 @@ from nursebot.settings import Settings
 def rt(tmp_path, monkeypatch):
     for name, sub in (("DATA_DIR", "data"), ("KB_DIR", "database"), ("MODELS_DIR", "models"), ("BIN_DIR", "bin")):
         monkeypatch.setattr(paths, name, tmp_path / sub)
-    monkeypatch.setattr(paths, "APP_DIR", tmp_path)
+    (tmp_path / "app").mkdir()
+    monkeypatch.setattr(paths, "APP_DIR", tmp_path / "app")  # scan roots must stay inside tmp_path
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
     paths.ensure_dirs()
     return Runtime(DB(paths.DATA_DIR / "t.db"))
