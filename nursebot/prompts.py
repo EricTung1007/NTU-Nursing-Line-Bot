@@ -80,14 +80,14 @@ def summarize_sources(contexts: List[Dict[str, Any]]) -> str:
 
 
 def build_messages(contexts: List[Dict[str, Any]], question: str, user: Dict[str, Any], weeks, tri: str,
-                   history: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+                   history: List[Dict[str, Any]], system_prompt: str = normal_system_prompt) -> List[Dict[str, str]]:
     who = {1: "是準爸爸", 0: "不是準爸爸"}.get(user.get("is_dad"), "是否為準爸爸：未知")
     # History excludes the question being answered (it is already saved; it goes in the user turn).
     prior = history[:-1] if history and history[-1]["role"] == "user" else history
     hist = "\n".join(("User: " if h["role"] == "user" else "Bot: ") + h["text"] for h in prior)
     ctx = "\n\n".join(c["text"] for c in contexts)
     system = f"""
-        {normal_system_prompt}\n
+        {system_prompt}\n
         📖 參考資料：
         {ctx}\n
         🗂 使用者資料：

@@ -9,68 +9,98 @@
 :root{--bg:#f6f7f9;--card:#fff;--ink:#1c2430;--mute:#64707f;--line:#e2e6ec;--accent:#1f6f6b;--accent-ink:#fff;--ok:#1d7a46;--warn:#a35f00;--bad:#b3261e}
 @media (prefers-color-scheme:dark){:root{--bg:#12171d;--card:#1b222b;--ink:#e6ebf1;--mute:#93a0af;--line:#2a343f;--accent:#58b5ae;--accent-ink:#06201e;--ok:#5ec98a;--warn:#e6a543;--bad:#ff8a80}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
-header{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
-h1{font-size:17px;margin:0 8px 0 0}nav{display:flex;gap:4px;flex-wrap:wrap}
-nav button{background:none;border:0;padding:8px 12px;border-radius:8px;color:var(--mute);font:inherit;cursor:pointer}
+header{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.top{display:flex;align-items:center;gap:12px;padding:10px 20px;flex-wrap:wrap}
+h1{font-size:17px;margin:0 8px 0 0}nav{display:flex;gap:4px;flex-wrap:wrap;padding:0 14px 8px}
+nav button{background:none;border:0;padding:7px 12px;border-radius:8px;color:var(--mute);font:inherit;cursor:pointer}
 nav button[aria-current=true]{background:var(--accent);color:var(--accent-ink)}
 main{max-width:1000px;margin:0 auto;padding:20px}section{display:none}section.on{display:block}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
-h2{font-size:16px;margin:0 0 10px}.mute{color:var(--mute)}.small{font-size:13px}
+h2{font-size:16px;margin:0 0 10px}.mute{color:var(--mute)}.small{font-size:13px}.en{color:var(--mute);font-size:12.5px;display:block}
 button.p,button.s,button.d{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);cursor:pointer;background:var(--card);color:var(--ink)}
-button.p{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}button.d{color:var(--bad)}
+button.p{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}button.d{color:var(--bad)}button.sm{padding:4px 10px;font-size:13px}
 button:disabled{opacity:.5;cursor:default}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:var(--mute)}.ok{background:var(--ok)}.warn{background:var(--warn)}.bad{background:var(--bad)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:var(--mute);flex:none}.ok{background:var(--ok)}.warn{background:var(--warn)}.bad{background:var(--bad)}
+.light{width:18px;height:18px;border-radius:50%;background:var(--mute);margin:0}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mute);font-weight:500;font-size:13px}
 tr.click{cursor:pointer}tr.click:hover{background:var(--bg)}
 input,select,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);width:100%}
-label{display:block;margin:10px 0 4px;font-size:13px;color:var(--mute)}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+textarea{font-family:inherit}label{display:block;margin:10px 0 4px;font-size:13px;color:var(--mute)}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .msg{padding:8px 12px;border-radius:12px;margin:6px 0;max-width:85%;white-space:pre-wrap}.msg.user{background:var(--accent);color:var(--accent-ink);margin-left:auto}.msg.bot{background:var(--bg);border:1px solid var(--line)}
 .chat{height:380px;overflow:auto;padding:4px}
 .bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--accent);width:0}
-pre{background:var(--bg);padding:12px;border-radius:8px;overflow:auto;max-height:420px;font-size:12px}
+pre{background:var(--bg);padding:12px;border-radius:8px;overflow:auto;max-height:420px;font-size:12px;white-space:pre-wrap;word-break:break-all}
 .banner{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:color-mix(in srgb,var(--warn) 15%,transparent);border:1px solid var(--warn)}
-details{margin-top:12px}summary{cursor:pointer;color:var(--mute)}
+details{margin-top:8px}summary{cursor:pointer;color:var(--mute)}
+.chk{display:flex;gap:6px;padding:10px 0;border-bottom:1px solid var(--line);align-items:flex-start}.chk>div{flex:1}.chk ol{margin:6px 0 0 18px;padding:0}.chk li{margin:3px 0}
+.field{padding:10px 0;border-bottom:1px solid var(--line)}.field .h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.field .err{color:var(--bad);font-size:13px}
+.tag{font-size:11px;padding:1px 6px;border-radius:6px;border:1px solid var(--line);color:var(--mute)}
+.md h1{font-size:19px}.md h2{font-size:16px;margin-top:18px}.md blockquote{margin:8px 0;padding:6px 12px;border-left:3px solid var(--accent);color:var(--mute)}.md table{margin:8px 0}.md code{background:var(--bg);padding:1px 5px;border-radius:4px}
 </style>
 </head>
 <body>
 <header>
-  <h1>產前衛教機器人</h1>
+  <div class="top">
+    <h1>產前衛教機器人</h1>
+    <span class="light" id="light"></span><span id="lightTxt" class="small"></span>
+    <button class="p" id="fixall">一鍵修復 <span class="en" style="display:inline;color:inherit;opacity:.8">Fix everything</span></button>
+    <span style="flex:1"></span><span id="life" class="small mute"></span>
+  </div>
+  <div id="fixlog" style="padding:0 20px"></div>
   <nav id="nav"></nav>
-  <span style="flex:1"></span><span id="life" class="small mute"></span>
 </header>
 <main>
 <section id="home">
   <div id="problems"></div>
   <div class="card row"><button class="p" id="toggle"></button><span class="mute small" id="toggleHint"></span></div>
   <div class="grid" id="cards"></div>
-  <div class="card"><h2>啟用前檢查</h2><div id="checklist"></div></div>
-  <div class="card"><h2>維護</h2><div class="row">
-    <a href="/api/backup"><button class="s">下載備份（資料庫＋知識庫文件）</button></a>
-    <button class="d" id="quit">關閉程式</button></div>
-    <p class="small mute">備份檔含 LINE 金鑰與使用者資料，請妥善保管。</p></div>
+  <div class="card"><h2>需要處理的項目 <span class="en" style="display:inline">To do</span></h2><div id="checklist"></div></div>
+  <div class="card"><h2>維護 <span class="en" style="display:inline">Maintenance</span></h2><div class="row">
+    <a href="/api/backup"><button class="s">下載備份 Download backup</button></a>
+    <button class="d" id="quit">關閉程式 Quit</button></div>
+    <p class="small mute">備份檔含 LINE 金鑰與使用者資料，請妥善保管。 Backups contain LINE keys and user data; keep them private.</p></div>
 </section>
 
 <section id="users"><div class="card"><div class="row"><input id="uq" placeholder="搜尋姓名或 ID" style="max-width:280px"><span class="mute small" id="ucount"></span></div>
   <table><thead><tr><th>姓名</th><th>身分</th><th>孕週</th><th>G/P</th><th>狀態</th><th>訊息</th><th>最後上線</th></tr></thead><tbody id="utable"></tbody></table></div>
   <div id="udetail"></div></section>
 
-<section id="unans"><div class="card"><h2>機器人答不出來的問題</h2><p class="mute small">這些問題在知識庫中找不到相關內容。補上衛教文件並重建後即可回答。</p>
+<section id="unans"><div class="card"><h2>機器人答不出來的問題 <span class="en" style="display:inline">Questions the bot could not answer</span></h2><p class="mute small">這些問題在知識庫中找不到相關內容。補上衛教文件並重建後即可回答。</p>
   <table><thead><tr><th>時間</th><th>使用者</th><th>問題</th><th>原因</th></tr></thead><tbody id="utab"></tbody></table></div></section>
 
 <section id="kb"><div id="kbwarn"></div>
-  <div class="card"><h2>衛教文件</h2><div class="row"><input type="file" id="kfile" multiple accept=".pdf,.txt,.md" style="max-width:360px"><button class="s" id="kup">上傳</button>
-  <button class="p" id="krebuild">重建知識庫</button></div>
+  <div class="card"><h2>衛教文件 <span class="en" style="display:inline">Documents</span></h2><div class="row"><input type="file" id="kfile" multiple accept=".pdf,.txt,.md" style="max-width:360px"><button class="s" id="kup">上傳 Upload</button>
+  <button class="p" id="krebuild">重建知識庫 Rebuild</button></div>
   <div id="kprog" style="margin:12px 0"></div>
   <table><thead><tr><th>文件</th><th>大小</th><th>段落數</th><th></th></tr></thead><tbody id="ktable"></tbody></table></div></section>
 
-<section id="test"><div class="card"><h2>測試對話</h2><p class="mute small">以測試身分與機器人對話，不會傳到 LINE。第一次會先請您填寫基本資料。</p>
+<section id="test"><div class="card"><h2>測試對話 <span class="en" style="display:inline">Test chat</span></h2><p class="mute small">以測試身分與機器人對話，不會傳到 LINE。第一次會先請您填寫基本資料。</p>
   <div class="chat" id="chat"></div><div class="row" style="margin-top:8px"><input id="ctext" placeholder="輸入訊息" style="flex:1"><button class="p" id="csend">送出</button><button class="s" id="creset">重新開始</button></div></div></section>
 
-<section id="settings"><div id="sform"></div><div class="row"><button class="p" id="ssave">儲存設定</button><span id="sstate" class="small mute"></span></div>
-  <p class="small mute">變更埠號、模型與通道設定後，請按「停止」再「啟動」才會生效。</p></section>
+<section id="settings">
+  <div id="sbanner"></div>
+  <div class="card"><div class="row"><input id="sq" placeholder="搜尋設定 Search settings" style="max-width:300px"><label style="margin:0"><input type="checkbox" id="sadv" style="width:auto"> 顯示進階設定 Show advanced</label>
+  <span style="flex:1"></span><button class="s" id="sgood">還原到上次正常的設定</button><button class="d" id="sreset">全部還原預設</button></div></div>
+  <div id="sform"></div>
+  <div class="row"><button class="p" id="ssave">儲存設定 Save</button><span id="sstate" class="small mute"></span></div>
+</section>
 
-<section id="logs"><div class="card"><div class="row"><h2 style="margin:0;flex:1">執行記錄</h2><button class="s" id="lref">重新整理</button></div><pre id="lpre"></pre></div></section>
+<section id="debug">
+  <div class="card"><div class="row"><h2 style="margin:0;flex:1">健康檢查 <span class="en" style="display:inline">Health checks (full)</span></h2><button class="s" id="dref">重新檢查 Re-check</button></div><div id="dchecks" style="margin-top:8px"></div></div>
+  <div class="card"><div class="row"><h2 style="margin:0;flex:1">端對端測試 <span class="en" style="display:inline">Self-test</span></h2><button class="s" id="stest">執行 Run</button></div>
+    <p class="small mute">依序測試：產生向量、搜尋知識庫、產生回答，並顯示每一步花的時間。</p><div id="stres"></div></div>
+  <div class="card"><h2>近期表現 <span class="en" style="display:inline">Recent performance</span></h2><div id="metrics" class="small"></div></div>
+  <div class="card"><h2>事件記錄 <span class="en" style="display:inline">What the app noticed and did</span></h2><div id="incidents" class="small"></div></div>
+  <div class="card"><div class="row"><h2 style="margin:0;flex:1">記錄檔 <span class="en" style="display:inline">Logs</span></h2>
+    <select id="lsrc" style="width:auto"><option value="app">程式 App</option><option value="chat">對話模型 Chat model</option><option value="embed">檢索模型 Embedding model</option></select>
+    <select id="llvl" style="width:auto"><option value="">全部 All</option><option value="WARNING">警告以上 Warnings+</option><option value="ERROR">僅錯誤 Errors</option></select>
+    <input id="lq" placeholder="搜尋 Search" style="width:160px"><label style="margin:0"><input type="checkbox" id="lauto" style="width:auto" checked> 自動更新 Live</label></div>
+    <pre id="lpre" style="margin-top:10px"></pre>
+    <div class="row"><a href="/api/diagnostic"><button class="p">下載診斷檔 Download diagnostic file</button></a><span class="small mute">傳給資訊人員用，不含 LINE 金鑰。 For IT support; never includes LINE keys.</span></div></div>
+</section>
+
+<section id="guide"><div class="card md"><div class="row"><button class="s" id="gzh">中文</button><button class="s" id="gen">English</button></div><div id="gbody"></div></div></section>
 </main>
 <script>
 const TOKEN=document.querySelector('meta[name=admin-token]').content;
@@ -79,23 +109,47 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 async function api(path,opt={}){
   opt.headers=Object.assign({'X-Admin-Token':TOKEN},opt.headers||{});
   if(opt.json!==undefined){opt.method=opt.method||'POST';opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(opt.json)}
-  const r=await fetch(path,opt); if(!r.ok) throw new Error(r.status); return r.json();
+  const r=await fetch(path,opt); let d=null; try{d=await r.json()}catch(e){}
+  if(!r.ok){const e=new Error(r.status);e.data=d;throw e} return d;
 }
-const TABS=[['home','總覽'],['users','使用者'],['unans','待補充問題'],['kb','知識庫'],['test','測試對話'],['settings','設定'],['logs','記錄']];
-let tab='home',st=null;
+const bi=([zh,en])=>`${esc(zh)}${en?`<span class="en">${esc(en)}</span>`:''}`;
+const TABS=[['home','總覽 Overview'],['users','使用者 Users'],['unans','待補充問題 Gaps'],['kb','知識庫 Knowledge'],['test','測試對話 Test'],['settings','設定 Settings'],['debug','除錯 Debug'],['guide','手冊 Guide']];
+let tab='home',st=null,kbTimer=null,logTimer=null;
 $('#nav').innerHTML=TABS.map(([k,l])=>`<button data-t="${k}">${l}</button>`).join('');
 $('#nav').onclick=e=>{const t=e.target.dataset.t;if(t)show(t)};
-function show(t){tab=t;document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id===t));
+function show(t){tab=t;clearTimeout(logTimer);document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id===t));
   document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.t===t));
-  ({home:refresh,users:loadUsers,unans:loadUnans,kb:loadKb,settings:loadSettings,logs:loadLogs,test:()=>{}})[t]();}
-const dot=(c)=>`<span class="dot ${c}"></span>`;
-const LIFE={stopped:'已停止',starting:'啟動中',running:'運作中',stopping:'停止中'};
+  ({home:refresh,users:loadUsers,unans:loadUnans,kb:loadKb,settings:loadSettings,debug:loadDebug,guide:loadGuide,test:()=>{}})[t]();}
+const dot=c=>`<span class="dot ${c}"></span>`;
+const LIFE={stopped:'已停止 Stopped',starting:'啟動中 Starting',running:'運作中 Running',stopping:'停止中 Stopping'};
+
+/* ---------- top bar: traffic light + one-click fix ---------- */
+function renderChecks(el,checks,showOk){
+  el.innerHTML=checks.filter(c=>showOk||c.level!=='ok').map(c=>`<div class="chk">${dot(c.level==='ok'?'ok':c.level==='warn'?'warn':'bad')}<div>
+    <div>${bi(c.title)}</div>${c.detail[0]?`<div class="small mute">${bi(c.detail)}</div>`:''}
+    ${c.steps.length?`<ol class="small">${c.steps.map(s=>`<li>${bi(s)}</li>`).join('')}</ol>`:''}</div>
+    ${c.fix?`<button class="s sm" data-fix="${c.fix}">${esc(c.fix_label[0])} <span class="en" style="display:inline">${esc(c.fix_label[1])}</span></button>`:''}</div>`).join('')||'<div class="mute small">一切正常 Everything is fine</div>';
+}
+document.addEventListener('click',async e=>{const f=e.target.closest('[data-fix]');if(!f)return;f.disabled=true;
+  try{const r=await api('/api/doctor/fix',{json:{id:f.dataset.fix}});flash(r.ok,r.zh,r.en)}catch(x){flash(false,'修復失敗','Fix failed')}
+  setTimeout(()=>{refreshLight();show(tab)},800)});
+function flash(ok,zh,en){$('#fixlog').innerHTML=`<div class="banner" style="margin:0 0 8px;${ok?'':'border-color:var(--bad)'}">${esc(zh)} <span class="en" style="display:inline">${esc(en)}</span></div>`;setTimeout(()=>{if(!fixPoll)$('#fixlog').innerHTML=''},9000)}
+async function refreshLight(){
+  try{const d=await api('/api/doctor');const s=d.summary;const c=s.bad?'bad':s.warn?'warn':'ok';
+    $('#light').className='light '+c;$('#lightTxt').textContent=c==='ok'?'一切正常 All good':c==='warn'?'請稍候或按一鍵修復 Wait or fix':'有問題，請按一鍵修復 Problem: press Fix';
+    $('#fixall').style.display=c==='ok'?'none':'';window._checks=d.checks;if(tab==='home')renderChecks($('#checklist'),d.checks,false)}catch(e){}}
+let fixPoll=null;
+$('#fixall').onclick=async()=>{$('#fixall').disabled=true;await api('/api/doctor/fix_all',{method:'POST'});
+  fixPoll=setInterval(async()=>{const j=await api('/api/doctor/job');
+    $('#fixlog').innerHTML=`<div class="banner" style="margin:0 0 8px">${j.log.map(l=>`<div>${l.ok?'':'! '}${esc(l.zh)} <span class="en" style="display:inline">${esc(l.en)}</span></div>`).join('')||'檢查中… Checking…'}</div>`;
+    if(j.done){clearInterval(fixPoll);fixPoll=null;$('#fixall').disabled=false;refreshLight();show(tab);setTimeout(()=>{if(!fixPoll)$('#fixlog').innerHTML=''},15000)}},1500)};
+
+/* ---------- overview ---------- */
 async function refresh(){
   st=await api('/api/status'); const running=st.life==='running';
   $('#life').innerHTML=dot(running?'ok':'')+LIFE[st.life];
-  $('#toggle').textContent=running?'停止機器人':'啟動機器人'; $('#toggle').className=running?'s':'p';
+  $('#toggle').textContent=running?'停止機器人 Stop':'啟動機器人 Start'; $('#toggle').className=running?'s':'p';
   $('#toggleHint').textContent=running?'LINE 訊息會由本機處理':'停止中，不會回覆 LINE 訊息';
-  $('#problems').innerHTML=Object.values(st.problems||{}).map(p=>`<div class="banner">${esc(p)}</div>`).join('');
   const t=st.tunnel,l=st.llm,k=st.kb;
   $('#cards').innerHTML=[
    ['LINE 連線',st.line.configured?(t.state==='up'&&t.webhook_ok?'ok':t.state==='failed'?'bad':'warn'):'bad',
@@ -106,14 +160,12 @@ async function refresh(){
    ['使用者',st.counts.users?'ok':'',`${st.counts.users} 位`],
    ['待補充問題',st.counts.unanswered?'warn':'ok',`${st.counts.unanswered} 則`]
   ].map(([n,c,s])=>`<div class="card" style="margin:0"><div class="mute small">${n}</div><div>${dot(c)}${esc(s)}</div></div>`).join('');
-  const chk=[[st.line.configured,'填寫 LINE Channel Access Token 與 Secret（設定頁）'],
-   [l.server_found,'放入 llama-server 程式（bin 資料夾）'],[l.chat_model,'放入對話模型 .gguf（models 資料夾）'],
-   [l.embed_model,'放入檢索模型 .gguf（models 資料夾，檔名含 embed 或 bge）'],
-   [k.ready&&!k.embed_mismatch,'建立知識庫（知識庫頁，按「重建知識庫」）'],[st.cloudflared_found,'放入 cloudflared（bin 資料夾），用於讓 LINE 連到本機']];
-  $('#checklist').innerHTML=chk.map(([ok,t])=>`<div>${dot(ok?'ok':'bad')}${esc(t)}</div>`).join('');
+  refreshLight();
 }
 $('#toggle').onclick=async()=>{$('#toggle').disabled=true;await api(st.life==='running'?'/api/stop':'/api/start',{method:'POST'});$('#toggle').disabled=false;refresh()};
-$('#quit').onclick=async()=>{if(confirm('確定關閉程式？機器人將停止回覆。')){await api('/api/quit',{method:'POST'});document.body.innerHTML='<p style="padding:40px">程式已關閉，可關閉此視窗。</p>'}};
+$('#quit').onclick=async()=>{if(confirm('確定關閉程式？機器人將停止回覆。 Quit? The bot will stop replying.')){await api('/api/quit',{method:'POST'});document.body.innerHTML='<p style="padding:40px">程式已關閉，可關閉此視窗。 Closed; you can close this window.</p>'}};
+
+/* ---------- users / gaps ---------- */
 const ago=t=>{const s=Date.now()/1000-t;return s<90?'剛剛':s<5400?Math.round(s/60)+' 分鐘前':s<172800?Math.round(s/3600)+' 小時前':Math.round(s/86400)+' 天前'};
 async function loadUsers(){
   const r=await api('/api/users?q='+encodeURIComponent($('#uq').value));
@@ -138,7 +190,8 @@ async function openUser(id){
 }
 async function loadUnans(){const r=await api('/api/unanswered');
   $('#utab').innerHTML=r.items.map(i=>`<tr><td class="small">${ago(i.ts)}</td><td>${esc(i.name||i.user_id.slice(0,8))}</td><td>${esc(i.text)}</td><td>${i.flag==='no_data'?'知識庫無相關內容':'系統錯誤'}</td></tr>`).join('')||'<tr><td colspan=4 class="mute">目前沒有</td></tr>'}
-let kbTimer=null;
+
+/* ---------- knowledge base ---------- */
 async function loadKb(){
   const k=await api('/api/kb'); const b=k.build;
   $('#kbwarn').innerHTML=(k.embed_mismatch?`<div class="banner">檢索模型已更換（索引建立時：${esc(k.built_with)}），請重建知識庫，否則搜尋結果會不準。</div>`:'')+
@@ -146,40 +199,98 @@ async function loadKb(){
     (k.pending.length&&b.state!=='running'?`<div class="banner">有 ${k.pending.length} 份新文件尚未納入：${esc(k.pending.join('、'))}。請按「重建知識庫」。</div>`:'');
   $('#kprog').innerHTML=b.state==='running'?`<div class="bar"><i style="width:${b.total?Math.round(100*b.done/b.total):5}%"></i></div><div class="small mute">${esc(b.message)} ${b.done}/${b.total}</div>`:(b.message?`<div class="small ${b.state==='failed'?'':'mute'}">${b.state==='failed'?'失敗：':''}${esc(b.message)}</div>`:'');
   $('#krebuild').disabled=b.state==='running';
-  $('#ktable').innerHTML=k.docs.map(d=>`<tr><td>${esc(d.name)}</td><td>${(d.size/1048576).toFixed(1)} MB</td><td>${d.chunks||'<span class="mute">未建立</span>'}</td><td><button class="d" data-del="${esc(d.name)}">刪除</button></td></tr>`).join('')||'<tr><td colspan=4 class="mute">尚無文件</td></tr>';
+  $('#ktable').innerHTML=k.docs.map(d=>`<tr><td>${esc(d.name)}</td><td>${(d.size/1048576).toFixed(1)} MB</td><td>${d.chunks||'<span class="mute">未建立</span>'}</td><td><button class="d sm" data-del="${esc(d.name)}">刪除</button></td></tr>`).join('')||'<tr><td colspan=4 class="mute">尚無文件</td></tr>';
   clearTimeout(kbTimer); if(b.state==='running'&&tab==='kb') kbTimer=setTimeout(loadKb,1000);
 }
 $('#kup').onclick=async()=>{const f=$('#kfile').files;if(!f.length)return;const fd=new FormData();for(const x of f)fd.append('files',x);
   const r=await api('/api/kb/upload',{method:'POST',body:fd});if(r.errors.length)alert(r.errors.join('\n'));$('#kfile').value='';loadKb()};
 $('#krebuild').onclick=async()=>{await api('/api/kb/rebuild',{method:'POST'});loadKb()};
 $('#ktable').onclick=async e=>{const n=e.target.dataset.del;if(n&&confirm('刪除「'+n+'」？需重建知識庫才會生效。')){await api('/api/kb/doc?name='+encodeURIComponent(n),{method:'DELETE'});loadKb()}};
+
+/* ---------- test chat ---------- */
 const addMsg=(r,t)=>{$('#chat').insertAdjacentHTML('beforeend',`<div class="msg ${r}">${esc(t)}</div>`);$('#chat').scrollTop=1e9};
 async function send(){const t=$('#ctext').value.trim();if(!t)return;$('#ctext').value='';addMsg('user',t);$('#csend').disabled=true;
-  try{addMsg('bot',(await api('/api/chat',{json:{text:t}})).reply)}catch(e){addMsg('bot','（錯誤）')}$('#csend').disabled=false;$('#ctext').focus()}
+  try{addMsg('bot',(await api('/api/chat',{json:{text:t}})).reply)}catch(e){addMsg('bot','（錯誤，請到除錯頁查看）')}$('#csend').disabled=false;$('#ctext').focus()}
 $('#csend').onclick=send;$('#ctext').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing)send()};
 $('#creset').onclick=async()=>{await api('/api/chat/reset',{method:'POST'});$('#chat').innerHTML=''};
-const GROUPS=[['LINE',[['line_channel_access_token','Channel Access Token','secret'],['line_channel_secret','Channel Secret','secret'],['line_notify_user_ids','啟動時通知的 LINE User ID（逗號分隔）']]],
- ['緊急狀況（可由護理人員調整）',[['emergency_keywords','觸發關鍵字（逗號分隔）','area'],['emergency_reply','緊急回覆內容','area']]],
- ['進階：模型與連接埠',[['llm_mode','模型來源','sel:managed=由本程式啟動 llama.cpp;external=外部 OpenAI 相容服務'],['chat_model_path','對話模型（留空自動選擇）','model'],['embed_model_path','檢索模型（留空自動選擇）','model'],['llm_ctx','上下文長度'],['llm_gpu_layers','GPU 層數（0＝僅 CPU）'],['webhook_port','Webhook 連接埠'],['ui_port','管理介面連接埠'],['external_chat_url','外部服務網址（對話）'],['external_embed_url','外部服務網址（檢索）'],['chat_model_name','外部對話模型名稱'],['embed_model_name','外部檢索模型名稱'],['llama_server_path','llama-server 路徑（留空自動尋找）']]],
- ['進階：回答行為',[['top_k','參考段落數'],['max_distance','相關度門檻（越小越嚴格）'],['max_tokens','回答長度上限'],['temperature','溫度'],['history_turns','帶入的對話輪數'],['autostart','開啟程式時自動啟動','sel:true=是;false=否'],['tunnel_enabled','自動建立 Cloudflare 通道','sel:true=是;false=否']]]];
-async function loadSettings(){const r=await api('/api/settings');const s=r.settings;
-  $('#sform').innerHTML=GROUPS.map(([g,fs],i)=>{const body=fs.map(([k,l,t])=>{t=t||'';let inp;
-    if(t==='area')inp=`<textarea data-k="${k}" rows="3">${esc(s[k])}</textarea>`;
-    else if(t.startsWith('sel:'))inp=`<select data-k="${k}">${t.slice(4).split(';').map(o=>{const[v,n]=o.split('=');return`<option value="${v}" ${s[k]===v?'selected':''}>${esc(n)}</option>`}).join('')}</select>`;
-    else if(t==='model')inp=`<select data-k="${k}"><option value="">自動</option>${r.models.map(m=>`<option ${s[k].endsWith(m)?'selected':''} value="${esc(m)}">${esc(m)}</option>`).join('')}</select>`;
-    else if(t==='secret')inp=`<input data-k="${k}" type="password" placeholder="${s[k+'_set']?'已設定（留空表示不變更）':'尚未設定'}" autocomplete="off">`;
-    else inp=`<input data-k="${k}" value="${esc(s[k])}">`;
-    return`<label>${l}</label>${inp}`}).join('');
-    const extra=i===0?'<div class="row" style="margin-top:10px"><button class="s" id="ltest">測試 LINE 連線</button><span id="lres" class="small"></span></div>':'';
-    return i>=2?`<details class="card"><summary>${g}</summary>${body}</details>`:`<div class="card"><h2>${g}</h2>${body}${extra}</div>`}).join('');
-  $('#ltest').onclick=async()=>{const r=await api('/api/line/test',{method:'POST'});$('#lres').textContent=r.ok?'成功：'+r.name:'失敗，請檢查 Token（先儲存設定）'};
+
+/* ---------- settings (rendered from server-side metadata) ---------- */
+let SM=null;
+function fieldHtml(m,s,models){
+  const v=s[m.key]??'';let inp;
+  if(m.kind==='area'||m.kind==='prompt')inp=`<textarea data-k="${m.key}" rows="${m.kind==='prompt'?8:3}">${esc(v)}</textarea>`;
+  else if(m.kind==='select')inp=`<select data-k="${m.key}">${m.options.map(([o,n])=>`<option value="${esc(o)}" ${String(v)===o?'selected':''}>${esc(n)}</option>`).join('')}</select>`;
+  else if(m.kind==='model')inp=`<select data-k="${m.key}"><option value="">自動 Auto</option>${models.map(x=>`<option value="models/${esc(x)}" ${v.endsWith(x)?'selected':''}>${esc(x)}</option>`).join('')}${v&&!models.some(x=>v.endsWith(x))?`<option value="${esc(v)}" selected>${esc(v)}</option>`:''}</select>`;
+  else if(m.kind==='secret')inp=`<input data-k="${m.key}" type="password" autocomplete="off" placeholder="${s[m.key+'_set']?'已設定（留空表示不變更） set, blank keeps it':'尚未設定 not set'}">`;
+  else inp=`<input data-k="${m.key}" ${m.kind==='int'||m.kind==='float'?'inputmode="decimal"':''} value="${esc(v)}">`;
+  return `<div class="field" data-key="${m.key}" data-adv="${m.advanced?1:0}"><div class="h"><b>${esc(m.zh)}</b><span class="en" style="display:inline">${esc(m.en)}</span>${m.restart?'<span class="tag">需重新啟動 restart</span>':''}${m.advanced?'<span class="tag">進階 advanced</span>':''}
+    ${m.kind!=='secret'?`<button class="s sm" data-reset="${m.key}" style="margin-left:auto">還原預設</button>`:''}</div>
+    ${m.help_zh?`<div class="small mute">${esc(m.help_zh)} <span class="en" style="display:inline">${esc(m.help_en)}</span></div>`:''}
+    <div style="margin-top:6px">${inp}</div><div class="err" id="err_${m.key}"></div>
+    ${m.key==='line_channel_secret'?'<div class="row" style="margin-top:8px"><button class="s sm" id="ltest">測試 LINE 連線 Test LINE connection</button><span id="lres" class="small"></span></div>':''}</div>`;
 }
+function filterSettings(){const q=$('#sq').value.toLowerCase(),adv=$('#sadv').checked;
+  document.querySelectorAll('#sform .field').forEach(f=>{const m=SM.meta.find(x=>x.key===f.dataset.key);
+    const hit=!q||(m.zh+m.en+m.key+m.help_zh+m.help_en).toLowerCase().includes(q);
+    f.style.display=hit&&(adv||q||f.dataset.adv==='0')?'':'none'});
+  document.querySelectorAll('#sform .card').forEach(c=>{c.style.display=[...c.querySelectorAll('.field')].some(f=>f.style.display!=='none')?'':'none'})}
+async function loadSettings(){
+  SM=await api('/api/settings');
+  $('#sform').innerHTML=Object.entries(SM.groups).map(([g,[zh,en]])=>{const fs=SM.meta.filter(m=>m.group===g);
+    return fs.length?`<div class="card"><h2>${esc(zh)} <span class="en" style="display:inline">${esc(en)}</span></h2>${fs.map(m=>fieldHtml(m,SM.settings,SM.models)).join('')}</div>`:''}).join('');
+  $('#sbanner').innerHTML=SM.differs.length?`<div class="banner">目前設定與「上次正常運作」不同（${SM.differs.length} 項）。若剛改過設定後出問題，可按「還原到上次正常的設定」。</div>`:'';
+  $('#sgood').style.display=SM.differs.length?'':'none';
+  filterSettings();
+  const lt=$('#ltest');if(lt)lt.onclick=async()=>{const r=await api('/api/line/test',{method:'POST'});$('#lres').textContent=r.ok?'成功 OK：'+r.name:'失敗，請檢查 Token（先儲存設定） Failed; save settings first and check the token'};
+}
+$('#sq').oninput=filterSettings;$('#sadv').onchange=filterSettings;
+$('#sform').onclick=async e=>{const k=e.target.dataset.reset;if(k){await api('/api/settings/reset',{json:{keys:[k]}});loadSettings()}};
+$('#sreset').onclick=async()=>{if(confirm('把所有設定還原為預設值？（LINE 金鑰不受影響） Reset all settings to defaults? LINE keys are kept.')){await api('/api/settings/reset',{json:{}});loadSettings()}};
+$('#sgood').onclick=async()=>{await api('/api/settings/restore_good',{method:'POST'});loadSettings()};
 $('#ssave').onclick=async()=>{const d={};document.querySelectorAll('[data-k]').forEach(e=>{d[e.dataset.k]=e.value});
-  const model_keys=['chat_model_path','embed_model_path'];model_keys.forEach(k=>{if(d[k])d[k]='models/'+d[k]});
-  await api('/api/settings',{method:'PUT',json:d});$('#sstate').textContent='已儲存';setTimeout(()=>$('#sstate').textContent='',2500)};
-async function loadLogs(){const r=await api('/api/logs');$('#lpre').textContent=r.lines.join('\n');$('#lpre').scrollTop=1e9}
-$('#lref').onclick=loadLogs;
-setInterval(()=>{if(tab==='home')refresh().catch(()=>{})},3000);
+  document.querySelectorAll('.err').forEach(e=>e.textContent='');
+  try{const r=await api('/api/settings',{method:'PUT',json:d});$('#sstate').textContent=r.restart_needed?'已儲存。部分設定要「停止」再「啟動」才生效。 Saved; restart the bot for some changes.':'已儲存 Saved';setTimeout(()=>$('#sstate').textContent='',6000);refreshLight()}
+  catch(e){const er=e.data&&e.data.errors||{};for(const [k,[zh,en]] of Object.entries(er)){const el=$('#err_'+k);if(el)el.textContent=zh+' / '+en}
+    $('#sstate').textContent='有欄位需要修正 Please fix the highlighted fields';const first=document.querySelector('.err:not(:empty)');if(first)first.scrollIntoView({block:'center'})}};
+
+/* ---------- debug ---------- */
+async function loadDebug(){
+  $('#dchecks').innerHTML='<div class="mute small">檢查中… Checking…</div>';
+  api('/api/doctor?deep=1').then(d=>renderChecks($('#dchecks'),d.checks,true));
+  api('/api/metrics').then(m=>{$('#metrics').innerHTML=`最近 ${m.n} 則回覆：中位數 ${m.p50??'-'} 秒，95% ${m.p95??'-'} 秒，錯誤 ${m.errors}，查無資料 ${m.no_data}。<br>上次收到 LINE 訊息：${m.last_webhook_at?ago(m.last_webhook_at):'尚未'}；運作時間：${m.uptime?Math.round(m.uptime/60)+' 分鐘':'-'}`});
+  api('/api/incidents').then(r=>{$('#incidents').innerHTML=r.items.map(i=>`<div style="padding:4px 0">${dot(i.level==='info'?'ok':i.level==='bad'?'bad':'warn')}<span class="mute">${new Date(i.ts*1000).toLocaleTimeString()}</span> ${esc(i.zh)}<span class="en">${esc(i.en)}</span></div>`).join('')||'<span class="mute">目前沒有事件 No events yet</span>'});
+  loadLogs();
+}
+$('#dref').onclick=loadDebug;
+$('#stest').onclick=async()=>{$('#stest').disabled=true;$('#stres').innerHTML='<span class="mute small">測試中…（第一次可能較慢） Running…</span>';
+  const r=await api('/api/selftest',{method:'POST'});$('#stest').disabled=false;
+  $('#stres').innerHTML=r.steps.map(s=>`<div class="chk">${dot(s.ok?'ok':'bad')}<div>${bi([s.zh,s.en])}<div class="small mute">${s.secs} 秒 ${esc(s.detail)}</div></div></div>`).join('')+
+   (r.ok?'':'<p class="small">失敗的那一步就是問題所在；上方「健康檢查」會告訴您怎麼修。 The failed step is the culprit; the health checks above explain the fix.</p>')};
+async function loadLogs(){if(tab!=='debug')return;
+  const r=await api(`/api/logs?source=${$('#lsrc').value}&level=${$('#llvl').value}&q=${encodeURIComponent($('#lq').value)}`);
+  const pre=$('#lpre'),atEnd=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-20;pre.textContent=r.lines.join('\n')||'（沒有記錄 empty）';if(atEnd)pre.scrollTop=1e9;
+  clearTimeout(logTimer);if($('#lauto').checked)logTimer=setTimeout(loadLogs,3000)}
+['lsrc','llvl'].forEach(i=>$('#'+i).onchange=loadLogs);$('#lq').oninput=loadLogs;$('#lauto').onchange=loadLogs;
+
+/* ---------- guide (tiny markdown renderer) ---------- */
+let GUIDE=null,glang='zh';
+function md(t){const lines=t.split('\n');let h='',list=null,tbl=false;
+  const inl=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`(.+?)`/g,'<code>$1</code>');
+  const close=()=>{if(list){h+=`</${list}>`;list=null}if(tbl){h+='</tbody></table>';tbl=false}};
+  for(const l of lines){let m;
+    if(/^\|[-| ]+\|$/.test(l))continue;
+    if(l.startsWith('|')){const c=l.split('|').slice(1,-1).map(x=>x.trim());if(!tbl){close();h+='<table><thead><tr>'+c.map(x=>`<th>${inl(x)}</th>`).join('')+'</tr></thead><tbody>';tbl=true}else h+='<tr>'+c.map(x=>`<td>${inl(x)}</td>`).join('')+'</tr>';continue}
+    if(m=l.match(/^(#{1,2}) (.*)/)){close();h+=`<h${m[1].length}>${inl(m[2])}</h${m[1].length}>`;continue}
+    if(m=l.match(/^> (.*)/)){close();h+=`<blockquote>${inl(m[1])}</blockquote>`;continue}
+    if(m=l.match(/^\s*(\d+\.|-) (.*)/)){const t=m[1]==='-'?'ul':'ol';if(list!==t){close();h+=`<${t}>`;list=t}h+=`<li>${inl(m[2])}</li>`;continue}
+    if(!l.trim()){close();continue}
+    close();h+=`<p>${inl(l)}</p>`}
+  close();return h}
+async function loadGuide(){if(!GUIDE){const [zh,en]=(await api('/api/guide')).text.split('<!--EN-->');GUIDE={zh,en}}$('#gbody').innerHTML=md(GUIDE[glang])}
+$('#gzh').onclick=()=>{glang='zh';loadGuide()};$('#gen').onclick=()=>{glang='en';loadGuide()};
+
+setInterval(()=>{if(tab==='home')refresh().catch(()=>{})},4000);
+setInterval(()=>refreshLight(),20000);
 show('home');
 </script>
 </body>

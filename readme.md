@@ -29,7 +29,9 @@ Admin GUI :5050 (127.0.0.1 only, never exposed through the tunnel)
 | `nursebot/kb.py` | Document ingestion, batched embedding, atomic FAISS rebuild |
 | `nursebot/db.py`, `settings.py` | SQLite store; settings are edited in the GUI |
 | `nursebot/tunnel.py`, `line.py` | Cloudflare tunnel + LINE webhook registration; LINE API client |
-| `nursebot/web/` | Admin GUI (API + single page) |
+| `nursebot/doctor.py` | Health checks, plain-language steps, auto-fixes |
+| `nursebot/runtime.py` | Lifecycle, supervisor (auto-restart), incident log |
+| `nursebot/web/` | Admin GUI (API + single page) and the nurse note |
 
 ## Setup
 
@@ -43,6 +45,19 @@ Admin GUI :5050 (127.0.0.1 only, never exposed through the tunnel)
 5. Press "Start bot". The tunnel URL is registered with LINE automatically.
 
 Upgrading from the old version: on first launch the app imports `.env` LINE credentials and `memory_data/*.txt` into SQLite once. Rebuild the knowledge base after switching the embedding model; the GUI warns when the index was built with a different one.
+
+## Self-repair and debugging
+
+The app watches itself so operators do not have to:
+
+- **Fix everything** (top bar): runs every health check, applies the safe fixes (busy ports, moved model files, invalid settings, crashed models, dropped tunnel, stale knowledge base), then lists anything left with numbered plain-language steps in Chinese and English.
+- **Supervisor**: restarts a crashed llama-server (lowering context/GPU use after an out-of-memory), reconnects a lost tunnel, with rate limits so a permanently broken part is reported instead of restarted forever.
+- **Preflight** on every start applies the same safe fixes silently. A second double-click just reopens the existing window.
+- **Last working settings** are remembered after the first fully healthy run; one button undoes a bad edit.
+- **Debug page**: full checks including network, end-to-end self-test with per-step timings, reply latency stats, event timeline, live filtered logs (app and both model servers), and a diagnostic zip for IT that never contains LINE keys.
+- **Settings page**: every setting with bilingual help, validation, per-field reset, and search; the prompts are editable too.
+
+Nurse-facing instructions (Chinese and English) are in the app's Guide tab, from [`nursebot/web/static/nurse_note.md`](nursebot/web/static/nurse_note.md).
 
 ## What staff can do in the GUI (no files, no commands)
 

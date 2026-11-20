@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -94,6 +95,9 @@ class LlamaServers:
             cmd += ["--embeddings"]
             if self.s.get("embed_pooling"):
                 cmd += ["--pooling", self.s.get("embed_pooling")]
+        extra = self.s.get("extra_llama_args").strip()
+        if extra:
+            cmd += shlex.split(extra, posix=(sys.platform != "win32"))
         return cmd
 
     def start(self) -> Dict[str, str]:
@@ -134,6 +138,33 @@ class LlamaServers:
         p = self.procs.get(kind)
         return bool(p and p.poll() is None)
 
+    def dead(self) -> List[str]:
+        """Kinds whose process was started and has since exited."""
+        return [k for k, p in self.procs.items() if p.poll() is not None]
+
+    @staticmethod
+    def tail(kind: str, lines: int = 60) -> List[str]:
+        f = paths.DATA_DIR / f"llama-{kind}.log"
+        try:
+            with open(f, "rb") as fh:
+                fh.seek(0, 2)
+                fh.seek(max(0, fh.tell() - 40_000))
+                return fh.read().decode("utf-8", "replace").splitlines()[-lines:]
+        except OSError:
+            return []
+
+    def restart(self, kinds: Optional[List[str]] = None) -> Dict[str, str]:
+        with self._lock:
+            for k in kinds or list(self.procs):
+                p = self.procs.pop(k, None)
+                if p and p.poll() is None:
+                    p.terminate()
+                    try:
+                        p.wait(timeout=8)
+                    except subprocess.TimeoutExpired:
+                        p.kill()
+        return self.start()
+
 
 class LlmClient:
     def __init__(self, settings: Settings):
@@ -162,7 +193,7 @@ class LlmClient:
         return out
 
     def chat(self, messages: List[Dict[str, str]], *, max_tokens: Optional[int] = None,
-             temperature: Optional[float] = None, timeout: int = 120) -> str:
+             temperature: Optional[float] = None, timeout: Optional[int] = None) -> str:
         payload = {
             "model": self._model_name("chat"),
             "messages": messages,
@@ -172,7 +203,8 @@ class LlmClient:
             # Qwen3-style models: skip the thinking phase (replaces the old hand-built <think></think> prompt).
             "chat_template_kwargs": {"enable_thinking": False},
         }
-        r = self.http.post(self._base("chat") + "/v1/chat/completions", json=payload, timeout=timeout)
+        r = self.http.post(self._base("chat") + "/v1/chat/completions", json=payload,
+                           timeout=timeout or self.s.int("request_timeout"))
         r.raise_for_status()
         msg = r.json()["choices"][0]["message"]
         return clean_model_reply((msg.get("content") or "").strip()) or \

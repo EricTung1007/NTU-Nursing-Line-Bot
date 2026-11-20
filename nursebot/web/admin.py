@@ -6,19 +6,24 @@ Guards against a hostile web page driving it from the user's browser: Host heade
 from __future__ import annotations
 
 import io
+import json
 import logging
+import platform
+import sys
+import time
 import secrets
 import tempfile
 import zipfile
 from collections import deque
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 from flask import Flask, Response, abort, jsonify, request, send_file
 
 from .. import paths
-from ..llm import list_models
+from ..llm import LlamaServers, list_models
 from ..runtime import Runtime
+from ..settings import GROUP_TITLES, SCHEMA
 
 log = logging.getLogger("admin")
 
@@ -34,10 +39,10 @@ class RingHandler(logging.Handler):
         self.lines.append(self.format(record))
 
 
-def create_admin_app(rt: Runtime, ring: RingHandler, on_quit: Callable[[], None]) -> Flask:
+def create_admin_app(rt: Runtime, ring: RingHandler, on_quit: Callable[[], None], ui_port: Optional[int] = None) -> Flask:
     app = Flask("admin", static_folder=None)
     token = secrets.token_urlsafe(24)
-    ui_port = rt.settings.int("ui_port")
+    ui_port = ui_port or rt.settings.int("ui_port")
     allowed_hosts = {f"127.0.0.1:{ui_port}", f"localhost:{ui_port}"}
 
     @app.before_request
@@ -74,13 +79,31 @@ def create_admin_app(rt: Runtime, ring: RingHandler, on_quit: Callable[[], None]
     # ---- settings ----------------------------------------------------------
     @app.get("/api/settings")
     def get_settings():
-        return jsonify(settings=rt.settings.public(), models=[m.name for m in list_models()])
+        return jsonify(settings=rt.settings.public(), meta=rt.settings.meta(), groups=GROUP_TITLES,
+                       models=[m.name for m in list_models()], differs=rt.settings.differs_from_good(),
+                       restart_needed=bool(rt.life.value == "running"))
 
     @app.put("/api/settings")
     def put_settings():
-        rt.settings.update(request.get_json(force=True) or {})
+        items = request.get_json(force=True) or {}
+        errors = rt.settings.validate(items)
+        if errors:
+            return jsonify(ok=False, errors={k: list(v) for k, v in errors.items()}), 400
+        rt.settings.update(items)
         rt.llm.clear_cache()
+        logging.getLogger().setLevel(getattr(logging, rt.settings.get("log_level"), logging.INFO))
+        restart = [k for k in items if k in SCHEMA and SCHEMA[k].restart]
+        return jsonify(ok=True, restart_needed=bool(restart) and rt.life.value == "running")
+
+    @app.post("/api/settings/reset")
+    def reset_settings():
+        d = request.get_json(force=True) or {}
+        rt.settings.reset(d.get("keys"))
         return jsonify(ok=True)
+
+    @app.post("/api/settings/restore_good")
+    def restore_good():
+        return jsonify(changed=rt.settings.restore_good())
 
     @app.post("/api/line/test")
     def line_test():
@@ -167,10 +190,95 @@ def create_admin_app(rt: Runtime, ring: RingHandler, on_quit: Callable[[], None]
     def kb_rebuild():
         return jsonify(started=rt.kb.start_rebuild())
 
-    # ---- logs / backup -----------------------------------------------------
+    # ---- doctor / debug ----------------------------------------------------
+    @app.get("/api/doctor")
+    def doctor():
+        checks = rt.doctor.run(deep=request.args.get("deep") == "1")
+        return jsonify(checks=[c.to_dict() for c in checks], summary=rt.doctor.summary(checks))
+
+    @app.post("/api/doctor/fix")
+    def doctor_fix():
+        ok, zh, en = rt.doctor.fix((request.get_json(force=True) or {}).get("id", ""))
+        return jsonify(ok=ok, zh=zh, en=en)
+
+    @app.post("/api/doctor/fix_all")
+    def doctor_fix_all():
+        return jsonify(started=rt.doctor.fix_all_async())
+
+    @app.get("/api/doctor/job")
+    def doctor_job():
+        return jsonify(rt.doctor.job())
+
+    @app.get("/api/incidents")
+    def incidents():
+        return jsonify(items=list(rt.incidents)[::-1])
+
+    @app.get("/api/metrics")
+    def metrics():
+        m = list(rt.bot.metrics)
+        secs = sorted(x["secs"] for x in m)
+        return jsonify(n=len(m), errors=sum(1 for x in m if x["flag"] == "error"), no_data=sum(1 for x in m if x["flag"] == "no_data"),
+                       p50=secs[len(secs) // 2] if secs else None, p95=secs[int(len(secs) * 0.95) - 1] if len(secs) >= 2 else (secs[0] if secs else None),
+                       last_webhook_at=rt.last_webhook_at, uptime=(time.time() - rt.started_at) if rt.started_at and rt.life.value == "running" else None)
+
+    @app.post("/api/selftest")
+    def selftest():
+        """End-to-end probe with timings, so 'it does not answer' becomes 'step 3 failed'."""
+        steps = []
+
+        def step(name_zh, name_en, fn):
+            t0 = time.time()
+            try:
+                detail = fn()
+                steps.append({"zh": name_zh, "en": name_en, "ok": True, "secs": round(time.time() - t0, 2), "detail": detail or ""})
+                return True
+            except Exception as e:
+                steps.append({"zh": name_zh, "en": name_en, "ok": False, "secs": round(time.time() - t0, 2), "detail": str(e)[:300]})
+                return False
+
+        vec = {}
+        if step("產生向量（檢索模型）", "Embed a question", lambda: vec.setdefault("v", rt.llm.embed(["孕期腰痠怎麼辦"])[0]) and f"{len(vec['v'])} dims") \
+           and step("搜尋知識庫", "Search the knowledge base", lambda: f"{len(rt.kb.search(vec['v'], rt.settings.int('top_k'), 1e9))} passages"):
+            step("產生回答（對話模型）", "Generate a reply", lambda: rt.llm.chat([{"role": "user", "content": "請用一句話說：測試成功"}], max_tokens=40)[:80])
+        return jsonify(steps=steps, ok=all(s["ok"] for s in steps))
+
     @app.get("/api/logs")
     def logs():
-        return jsonify(lines=list(ring.lines)[-300:])
+        src = request.args.get("source", "app")
+        level = request.args.get("level", "")
+        q = request.args.get("q", "").lower()
+        if src in ("chat", "embed"):
+            lines = LlamaServers.tail(src, 300)
+        else:
+            lines = list(ring.lines)[-1000:]
+            if level:
+                order = ["DEBUG", "INFO", "WARNING", "ERROR"]
+                lines = [l for l in lines if any(f"[{x}]" in l for x in order[order.index(level):])]
+        if q:
+            lines = [l for l in lines if q in l.lower()]
+        return jsonify(lines=lines[-400:])
+
+    @app.get("/api/guide")
+    def guide():
+        p = paths.STATIC_DIR / "nurse_note.md"
+        return jsonify(text=p.read_text(encoding="utf-8") if p.exists() else "")
+
+    @app.get("/api/diagnostic")
+    def diagnostic():
+        """Support bundle: logs, redacted settings, doctor report. Secrets are never included."""
+        checks = rt.doctor.run(deep=True)
+        report = json.dumps({"time": time.strftime("%Y-%m-%d %H:%M:%S"), "platform": platform.platform(), "python": sys.version,
+                             "life": rt.life.value, "settings": rt.settings.redacted(),
+                             "checks": [c.to_dict() for c in checks], "kb": rt.kb.status(),
+                             "incidents": list(rt.incidents)[-100:]}, ensure_ascii=False, indent=2, default=str)
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("report.json", report)
+            z.writestr("app.log", "\n".join(ring.lines))
+            for kind in ("chat", "embed"):
+                z.writestr(f"llama-{kind}.log", "\n".join(LlamaServers.tail(kind, 300)))
+        buf.seek(0)
+        return send_file(buf, mimetype="application/zip", as_attachment=True, download_name="nursebot-diagnostic.zip")
 
     @app.get("/api/backup")
     def backup():

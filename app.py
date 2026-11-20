@@ -6,11 +6,14 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import logging.handlers
 import sys
 import threading
+import urllib.request
 import webbrowser
+from typing import Optional
 
 from werkzeug.serving import make_server
 
@@ -36,17 +39,43 @@ def setup_logging(verbose: bool) -> RingHandler:
     return ring
 
 
+def already_running(port: int) -> Optional[str]:
+    """If this app is already open (nurse double-clicked twice), return its URL instead of starting a second copy."""
+    for p in range(port, port + 20):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{p}/api/status", timeout=1) as r:
+                if r.status == 200 and "life" in json.loads(r.read()):
+                    return f"http://127.0.0.1:{p}/"
+        except (OSError, ValueError):
+            continue
+    return None
+
+
 def main() -> int:
     paths.ensure_dirs()
     ring = setup_logging("--verbose" in sys.argv)
     db = DB(paths.DATA_DIR / "nursebot.db")
     rt = Runtime(db)
+    existing = already_running(rt.settings.int("ui_port"))
+    if existing:
+        webbrowser.open(existing)  # one copy only: just bring up the existing window
+        return 0
     rt.settings.import_env(paths.APP_DIR / ".env")   # old deployments keep their LINE credentials
     migrate_memory(db, paths.APP_DIR / "memory_data")  # old per-user txt files -> SQLite (once)
 
     quit_event = threading.Event()
     port = rt.settings.int("ui_port")
-    server = make_server("127.0.0.1", port, create_admin_app(rt, ring, quit_event.set), threaded=True)
+    server = None
+    for p in range(port, port + 20):  # port taken (app opened twice?): use the next free one
+        try:
+            server = make_server("127.0.0.1", p, create_admin_app(rt, ring, quit_event.set, ui_port=p), threaded=True)
+            port = p
+            break
+        except OSError:
+            continue
+    if server is None:
+        logging.getLogger("app").error("no free port for the GUI")
+        return 1
     threading.Thread(target=server.serve_forever, daemon=True, name="admin").start()
     url = f"http://127.0.0.1:{port}/"
     logging.getLogger("app").info("admin GUI: %s", url)

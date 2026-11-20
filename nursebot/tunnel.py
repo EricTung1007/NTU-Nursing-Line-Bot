@@ -53,7 +53,12 @@ class Tunnel:
         self._lock = threading.Lock()
         self._gen = 0  # invalidates a stale starter thread after stop()
 
+    def alive(self) -> bool:
+        return bool(self._proc and self._proc.poll() is None)
+
     def status(self) -> Dict[str, object]:
+        if self.state in (TState.UP, TState.STARTING) and self._proc is not None and self._proc.poll() is not None:
+            self.state, self.message = TState.FAILED, "通道程式已中斷"
         return {"state": self.state.value, "url": self.url, "message": self.message, "webhook_ok": self.webhook_ok}
 
     def _set(self, gen: int, state: TState, message: str = "") -> None:

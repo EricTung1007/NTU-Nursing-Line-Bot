@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
+from collections import deque
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,8 +17,7 @@ from .db import DB
 from .kb import KnowledgeBase
 from .line import LineClient
 from .llm import LlmClient
-from .prompts import (FIELD_DESCRIPTIONS, build_messages, fields_system_prompt, no_data_reply,
-                      summarize_sources)
+from .prompts import FIELD_DESCRIPTIONS, build_messages, summarize_sources
 from .settings import Settings
 
 log = logging.getLogger("bot")
@@ -26,6 +27,7 @@ ERROR_REPLY = "❌ 抱歉，目前無法取得回應，請稍後再試。"
 class Bot:
     def __init__(self, db: DB, settings: Settings, llm: LlmClient, kb: KnowledgeBase, line: LineClient):
         self.db, self.s, self.llm, self.kb, self.line = db, settings, llm, kb, line
+        self.metrics: deque = deque(maxlen=100)  # recent replies: {ts, secs, flag} for the debug page
 
     # ---- steps -------------------------------------------------------------
     def _is_emergency(self, text: str) -> bool:
@@ -37,7 +39,7 @@ class Bot:
             return fields
         for max_tokens in (80, 200):
             try:
-                out = self.llm.chat([{"role": "system", "content": fields_system_prompt},
+                out = self.llm.chat([{"role": "system", "content": self.s.get("fields_prompt")},
                                      {"role": "user", "content": text}], max_tokens=max_tokens, temperature=0.0, timeout=30)
             except Exception as e:  # LLM down must not break onboarding
                 log.warning("profile extraction failed: %s", e)
@@ -75,14 +77,16 @@ class Bot:
             vec = self.llm.embed_one(text)
             ctx = self.kb.search(vec, self.s.int("top_k"), self.s.float("max_distance"))
             if not ctx:
-                return no_data_reply, "no_data"
+                return self.s.get("no_data_reply"), "no_data"
             weeks = pf.current_weeks(user)
             history = self.db.recent_messages(user_id, self.s.int("history_turns") * 2)
-            msgs = build_messages(ctx, text, user, weeks, pf.trimester(weeks), history)
+            msgs = build_messages(ctx, text, user, weeks, pf.trimester(weeks), history, self.s.get("system_prompt"))
             reply = self.llm.chat(msgs)
             if not reply:
                 return "❌ 模型未產生回應，請稍後再試。", "error"
-            return reply + f"\n資料來源: {summarize_sources(ctx)}", None
+            if self.s.bool("show_sources"):
+                reply += f"\n資料來源: {summarize_sources(ctx)}"
+            return reply, None
         except Exception:
             log.exception("answer failed")
             return ERROR_REPLY, "error"
@@ -99,7 +103,9 @@ class Bot:
             return f"✅ 已更正{corr.label}"
 
         msg_id = self.db.add_message(user_id, "user", text)
+        t0 = time.time()
         reply, flag = self._route(user_id, text)
+        self.metrics.append({"ts": t0, "secs": round(time.time() - t0, 2), "flag": flag})
         if flag:
             self.db.set_flag(msg_id, flag)
         self.db.add_message(user_id, "bot", reply)

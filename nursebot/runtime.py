@@ -11,9 +11,11 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
+from collections import deque
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from flask import Flask, abort, request
 from werkzeug.serving import make_server
@@ -21,6 +23,7 @@ from werkzeug.serving import make_server
 from . import paths
 from .bot import Bot, Dispatcher
 from .db import DB
+from .doctor import Doctor, explain_llama_log
 from .kb import KnowledgeBase
 from .line import LineClient
 from .llm import LlamaServers, LlmClient, find_llama_server, resolve_model
@@ -51,6 +54,11 @@ class Runtime:
         self.life = Life.STOPPED
         self.problems: Dict[str, str] = {}
         self.last_webhook_at: Optional[float] = None
+        self.started_at: Optional[float] = None
+        self.incidents: deque = deque(maxlen=200)   # what the app noticed and did, for the debug page
+        self.doctor = Doctor(self)
+        self._stop_sup = threading.Event()
+        self._repair_log: Dict[str, List[float]] = {}
         self._http = None
         self._lock = threading.Lock()
 
@@ -86,6 +94,11 @@ class Runtime:
 
     # ---- lifecycle ---------------------------------------------------------
     def start(self) -> Dict[str, str]:
+        if self.life == Life.STOPPED and self.settings.bool("auto_repair"):
+            try:
+                self.doctor.preflight()
+            except Exception:
+                log.exception("preflight failed")
         with self._lock:
             if self.life != Life.STOPPED:
                 return self.problems
@@ -96,7 +109,7 @@ class Runtime:
                 problems["line"] = "尚未設定 LINE Channel Access Token / Secret"
             if self.settings.get("llm_mode") == "managed":
                 problems.update(self.servers.start())
-            self.dispatcher = Dispatcher(self.bot)
+            self.dispatcher = Dispatcher(self.bot, self.settings.int("worker_threads"))
             port = self.settings.int("webhook_port")
             self._http = make_server("127.0.0.1", port, self._webhook_app(), threaded=True)
             threading.Thread(target=self._http.serve_forever, daemon=True, name="webhook").start()
@@ -104,7 +117,10 @@ class Runtime:
                 self.tunnel.start(port)
             for uid in self.settings.list("line_notify_user_ids"):
                 self.line.push(uid, f"[後臺訊息]LINE Bot 已啟動（{datetime.now():%Y-%m-%d %H:%M}）")
+            self.started_at = time.time()
             self.life = Life.RUNNING
+            self._stop_sup.clear()
+            threading.Thread(target=self._supervise, daemon=True, name="supervisor").start()
         except OSError as e:  # typically: port already in use
             problems["webhook"] = f"無法啟動 Webhook（連接埠 {self.settings.get('webhook_port')} 可能被占用）：{e}"
             self._teardown()
@@ -117,6 +133,7 @@ class Runtime:
 
     def _teardown(self) -> None:
         self.life = Life.STOPPING
+        self._stop_sup.set()
         self.tunnel.stop()
         if self._http:
             self._http.shutdown()
@@ -132,6 +149,57 @@ class Runtime:
             if self.life in (Life.STOPPED, Life.STOPPING):
                 return
         self._teardown()
+
+    # ---- self-repair -------------------------------------------------------
+    def incident(self, level: str, zh: str, en: str) -> None:
+        self.incidents.append({"ts": time.time(), "level": level, "zh": zh, "en": en})
+        getattr(log, "warning" if level != "info" else "info")("%s | %s", zh, en)
+
+    def _may_repair(self, key: str, max_times: int, window: float) -> bool:
+        """Rate limit so a permanently broken thing is reported, not restarted forever."""
+        now = time.time()
+        hist = [t for t in self._repair_log.get(key, []) if now - t < window]
+        if len(hist) >= max_times:
+            self._repair_log[key] = hist
+            return False
+        hist.append(now)
+        self._repair_log[key] = hist
+        return True
+
+    def _supervise(self) -> None:
+        snapped = False
+        while not self._stop_sup.wait(10):
+            if self.life != Life.RUNNING or not self.settings.bool("auto_repair"):
+                continue
+            try:
+                if self.settings.get("llm_mode") == "managed":
+                    for kind in self.servers.dead():
+                        exp = explain_llama_log(LlamaServers.tail(kind))
+                        why = exp[0] if exp else ("原因不明", "unknown cause")
+                        if not self._may_repair("llm_" + kind, 3, 600):
+                            self.incident("bad", f"{kind} 模型反覆當機（{why[0]}），已停止自動重啟，請看除錯頁",
+                                          f"{kind} model keeps crashing ({why[1]}); auto-restart paused. See the Debug page")
+                            self.servers.procs.pop(kind, None)
+                            continue
+                        if exp and exp[1] == "degrade_llm":
+                            self.settings.update({"llm_ctx": "2048", "llm_gpu_layers": "0"})
+                        self.incident("warn", f"{kind} 模型停止（{why[0]}），自動重新啟動", f"{kind} model stopped ({why[1]}); restarting")
+                        self.servers.restart([kind])
+                if self.tunnel.status()["state"] == "failed" and self.settings.line_ready() and self.settings.bool("tunnel_enabled"):
+                    if self._may_repair("tunnel", 5, 3600):
+                        self.incident("warn", "LINE 通道中斷，自動重新連線", "Tunnel lost; reconnecting")
+                        self.tunnel.stop()
+                        self.tunnel.start(self.settings.int("webhook_port"))
+                if not snapped:
+                    h = self.llm.health()
+                    t = self.tunnel.status()
+                    tunnel_ok = not (self.settings.bool("tunnel_enabled") and self.settings.line_ready()) or t["state"] == "up"
+                    if h["chat"] and h["embed"] and tunnel_ok:
+                        self.settings.snapshot_good()
+                        self.incident("info", "一切正常，已記住目前設定為「上次正常的設定」", "All healthy; settings saved as the last working configuration")
+                        snapped = True
+            except Exception:
+                log.exception("supervisor loop error")
 
     # ---- GUI status --------------------------------------------------------
     def status(self) -> Dict[str, Any]:
