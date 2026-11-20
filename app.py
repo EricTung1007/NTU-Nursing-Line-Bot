@@ -81,6 +81,8 @@ def main() -> int:
     url = f"http://127.0.0.1:{port}/"
     logging.getLogger("app").info("admin GUI: %s", url)
 
+    rt.updater.start_background()
+
     if rt.settings.bool("autostart") and rt.settings.line_ready():
         threading.Thread(target=rt.start, daemon=True, name="autostart").start()
 

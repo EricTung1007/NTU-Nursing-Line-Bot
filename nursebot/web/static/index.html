@@ -23,6 +23,13 @@ button.p{background:var(--accent);color:var(--accent-ink);border-color:var(--acc
 button:disabled{opacity:.5;cursor:default}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:var(--mute);flex:none}.ok{background:var(--ok)}.warn{background:var(--warn)}.bad{background:var(--bad)}
 .light{width:18px;height:18px;border-radius:50%;background:var(--mute);margin:0}
+.act{display:inline-flex;align-items:center;gap:7px;padding:3px 10px;border:1px solid var(--line);border-radius:999px;font-size:13px}
+.act i{width:10px;height:10px;border-radius:50%;background:var(--mute);display:inline-block}
+.act.idle i{background:var(--ok)}.act.loading i{background:var(--warn);animation:pulse 1.2s ease-in-out infinite}
+.act.searching i{background:var(--accent);animation:pulse .7s ease-in-out infinite}
+.act.generating i{background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:ring 1s ease-out infinite}
+@keyframes pulse{50%{opacity:.25}}@keyframes ring{to{box-shadow:0 0 0 9px transparent}}
+@media (prefers-reduced-motion:reduce){.act i{animation:none!important}}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mute);font-weight:500;font-size:13px}
 tr.click{cursor:pointer}tr.click:hover{background:var(--bg)}
 input,select,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);width:100%}
@@ -45,9 +52,10 @@ details{margin-top:8px}summary{cursor:pointer;color:var(--mute)}
     <h1>產前衛教機器人</h1>
     <span class="light" id="light"></span><span id="lightTxt" class="small"></span>
     <button class="p" id="fixall">一鍵修復 <span class="en" style="display:inline;color:inherit;opacity:.8">Fix everything</span></button>
-    <span style="flex:1"></span><span id="life" class="small mute"></span>
+    <span style="flex:1"></span><span id="act" class="act" title="模型即時狀態 Live model status" aria-live="polite"><i></i><span id="actTxt"></span></span><span id="ver" class="small mute"></span><button class="s sm" id="updbtn">檢查更新 Check for updates</button><span id="life" class="small mute"></span>
   </div>
   <div id="fixlog" style="padding:0 20px"></div>
+  <div id="updbanner" style="padding:0 20px"></div>
   <nav id="nav"></nav>
 </header>
 <main>
@@ -305,6 +313,28 @@ function md(t){const lines=t.split('\n');let h='',list=null,tbl=false;
 async function loadGuide(){if(!GUIDE){const [zh,en]=(await api('/api/guide')).text.split('<!--EN-->');GUIDE={zh,en}}$('#gbody').innerHTML=md(GUIDE[glang])}
 $('#gzh').onclick=()=>{glang='zh';loadGuide()};$('#gen').onclick=()=>{glang='en';loadGuide()};
 
+const ACT={offline:['離線','Offline'],loading:['模型載入中','Loading'],idle:['待命中','Idle'],searching:['檢索中','Searching'],generating:['生成回答中','Generating']};
+async function pollActivity(){
+  try{const a=await api('/api/activity');window._act=a;const t=ACT[a.state];
+    $('#act').className='act '+a.state;
+    $('#actTxt').innerHTML=`${t[0]} <span class="en" style="display:inline">${t[1]}</span>${a.pending>1?` · ${a.pending-1} 則排隊 queued`:''}`;
+    $('#act').title=`對話模型 ${a.chat_ready?'線上':'未就緒'} / 檢索模型 ${a.embed_ready?'線上':'未就緒'}`+(a.last_secs!=null?` / 上次回覆 ${a.last_secs} 秒`:'')}catch(e){$('#act').className='act offline';$('#actTxt').textContent='無法連線'}
+  setTimeout(pollActivity,window._act&&window._act.state==='generating'?800:2000)}
+pollActivity();
+let updTimer=null;
+async function loadUpdate(manual){
+  let u;try{u=manual?await api('/api/update/check',{method:'POST'}):await api('/api/update')}catch(e){return}
+  $('#ver').textContent='v'+u.current;const j=u.job;let h='';
+  const box=t=>`<div class="banner" style="margin:0 0 8px">${t}</div>`;
+  if(j.running){const p=j.total?Math.round(100*j.bytes/j.total):0;h=box(`正在下載新版本… ${p}% <span class="en" style="display:inline">Downloading the update…</span><div class="bar" style="margin-top:6px"><i style="width:${p}%"></i></div>`);clearTimeout(updTimer);updTimer=setTimeout(()=>loadUpdate(false),1500)}
+  else if(j.error)h=box('更新失敗：'+esc(j.error));
+  else if(j.done&&j.current==='update'&&!j.error&&u.available)h=box('安裝程式已開啟。Mac 請把程式拖到「應用程式」取代舊版。 The installer is open; on Mac drag the app over the old one.');
+  else if(u.available)h=box(`有新版本 v${esc(u.latest)}（${MB(Math.round(u.size/1e6))}）。 A new version is available. ${u.installable?'<button class="p sm" id="updgo">立即更新 Update now</button>':'<span class="mute">（原始碼版本請自行 git pull）</span>'} <a href="${esc(u.url)}" target="_blank" rel="noopener">更新內容 Release notes</a>`);
+  else if(manual)h=box(u.error?esc(u.error):'已是最新版本 You are up to date (v'+esc(u.current)+')');
+  $('#updbanner').innerHTML=h;const g=$('#updgo');if(g)g.onclick=async()=>{g.disabled=true;await api('/api/update/install',{method:'POST'});loadUpdate(false)};
+  if(manual&&!u.available&&!j.running)setTimeout(()=>{if(!j.running)$('#updbanner').innerHTML=''},6000)}
+$('#updbtn').onclick=()=>loadUpdate(true);
+setInterval(()=>loadUpdate(false),3600000);loadUpdate(false);
 setInterval(()=>{if(tab==='home')refresh().catch(()=>{})},4000);
 setInterval(()=>refreshLight(),20000);
 show('home');

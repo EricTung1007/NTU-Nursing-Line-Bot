@@ -34,3 +34,4 @@ bin/llama-server*
 bin/*.dll
 database/kb_info.json
 database/*.tmp
+_version.py

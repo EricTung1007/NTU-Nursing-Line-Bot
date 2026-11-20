@@ -106,6 +106,8 @@ SCHEMA: Dict[str, Spec] = {s[0]: s[1] for s in [
     ("tunnel_enabled", Spec("true", G_NET, "自動建立 Cloudflare 通道", "Auto-create Cloudflare tunnel", "select", _YESNO, restart=True)),
     # ---- system
     ("autostart", Spec("true", G_SYS, "開啟程式時自動啟動機器人", "Start the bot when the app opens", "select", _YESNO)),
+    ("update_check", Spec("true", G_SYS, "自動檢查新版本", "Check for new versions automatically", "select", _YESNO,
+        help_zh="每 12 小時向 GitHub 查詢一次，只查詢版本號，不傳送任何使用者資料。", help_en="Asks GitHub every 12 hours. Only the version is looked up; no user data is sent.")),
     ("auto_repair", Spec("true", G_SYS, "自動修復（模型或通道當掉時自動重啟）", "Self-repair (restart crashed model/tunnel)", "select", _YESNO)),
     ("worker_threads", Spec("4", G_SYS, "同時處理訊息數", "Concurrent message workers", "int", minv=1, maxv=32, restart=True, advanced=True)),
     ("log_level", Spec("INFO", G_SYS, "記錄詳細程度", "Log detail", "select",

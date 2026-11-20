@@ -31,14 +31,14 @@
 
 ## 第一次安裝（只做一次，不需要任何指令）
 
-1. 到專案的 GitHub「Releases」頁，下載 **NTULineBot-Setup.exe**（Windows）或 **NTULineBot-mac.zip**（Mac）。
-2. **Windows**：雙擊 Setup，一路按「下一步」。第一次可能出現藍色「Windows 已保護您的電腦」：按「**其他資訊**」→「**仍要執行**」（因為程式沒有付費簽章，這是正常的）。**Mac**：解壓縮後拖到「應用程式」，第一次要**按右鍵 → 打開**。
+1. 到專案的 GitHub「Releases」頁，下載 **NTULineBot-Setup.exe**（Windows）或 **NTULineBot-mac.dmg**（Mac）。
+2. **Windows**：雙擊 Setup，一路按「下一步」。第一次可能出現藍色「Windows 已保護您的電腦」：按「**其他資訊**」→「**仍要執行**」（因為程式沒有付費簽章，這是正常的）。**Mac**：開啟 dmg，把程式拖到「Applications」，第一次要**按右鍵 → 打開**。
 3. 開啟「NTU Nursing LINE Bot」。畫面最上方會寫「第一次使用」，按 **「一鍵修復」**，程式會自己下載所需檔案（約 2.7 GB，需要網路，中斷後會接著下載）。
 4. 到「設定」→「LINE 連線」貼上 **Channel Access Token** 與 **Channel Secret**，按「測試 LINE 連線」。
 5. 再按一次「一鍵修復」。程式會建立知識庫並啟動機器人。
 6. 到「測試對話」傳一句話試試，沒問題就完成了。
 
-> 更新程式：下載新版 Setup 再安裝一次即可，資料與設定都會保留。
+> 更新程式：畫面右上角按「檢查更新」，有新版時按「立即更新」就會自動完成（程式也會每 12 小時自己檢查一次）。資料與設定都會保留。
 
 ## 每週與每月
 
@@ -87,14 +87,14 @@ This program is the ward's education helper: mothers and families ask questions 
 
 ## First-time setup (once, no commands)
 
-1. On the project's GitHub **Releases** page, download **NTULineBot-Setup.exe** (Windows) or **NTULineBot-mac.zip** (Mac).
-2. **Windows**: double-click Setup and keep pressing Next. The first time you may see a blue "Windows protected your PC" box: press **More info** then **Run anyway** (the program has no paid signature; this is expected). **Mac**: unzip, drag to Applications, and the first time **right-click, then Open**.
+1. On the project's GitHub **Releases** page, download **NTULineBot-Setup.exe** (Windows) or **NTULineBot-mac.dmg** (Mac).
+2. **Windows**: double-click Setup and keep pressing Next. The first time you may see a blue "Windows protected your PC" box: press **More info** then **Run anyway** (the program has no paid signature; this is expected). **Mac**: open the dmg, drag the app to Applications, and the first time **right-click, then Open**.
 3. Open "NTU Nursing LINE Bot". The top says "First run"; press **Fix everything** and the program downloads what it needs (about 2.7 GB, needs internet, resumes if interrupted).
 4. Settings → LINE connection: paste the **Channel Access Token** and **Channel Secret**, press "Test LINE connection".
 5. Press **Fix everything** again. It builds the knowledge base and starts the bot.
 6. Send a line in "Test chat". If it answers, you are done.
 
-> To update: download the new Setup and install it again. Your data and settings are kept.
+> To update: press "Check for updates" at the top right; when a new version exists press "Update now" and it does the rest (the program also checks by itself every 12 hours). Your data and settings are kept.
 
 ## Weekly and monthly
 

@@ -86,18 +86,64 @@ def cloudflared_asset() -> Tuple[str, str]:
     return CLOUDFLARED + name, name
 
 
-class Installer:
-    def __init__(self, present: Dict[str, Callable[[], bool]]):
+class Downloader:
+    """Resumable, verifiable download with a progress dict shared with the GUI."""
+
+    def __init__(self) -> None:
         self.http = requests.Session()
-        self.http.headers["User-Agent"] = "NTULineBot-installer"
+        self.http.headers["User-Agent"] = "NTULineBot"
+        self._job: Dict[str, object] = {"running": False, "done": True, "current": "", "bytes": 0, "total": 0,
+                                        "error": "", "finished": []}
+
+    def _download(self, url: str, dest: Path, sha256: Optional[str] = None) -> None:
+        """Resumable download to dest.part, verified, then atomically renamed."""
+        part = dest.with_suffix(dest.suffix + ".part")
+        last: Optional[Exception] = None
+        for attempt in range(4):
+            try:
+                have = part.stat().st_size if part.exists() else 0
+                headers = {"Range": f"bytes={have}-"} if have else {}
+                with self.http.get(url, headers=headers, stream=True, timeout=30, allow_redirects=True) as r:
+                    if r.status_code == 416:  # already complete
+                        break
+                    r.raise_for_status()
+                    if have and r.status_code != 206:  # server ignored Range: start over
+                        have = 0
+                    total = have + int(r.headers.get("Content-Length", 0))
+                    self._job.update(bytes=have, total=total)
+                    with open(part, "ab" if have else "wb") as f:
+                        for chunk in r.iter_content(1 << 20):
+                            f.write(chunk)
+                            self._job["bytes"] = int(self._job["bytes"]) + len(chunk)  # type: ignore[arg-type]
+                last = None
+                break
+            except (requests.RequestException, OSError) as e:
+                last = e
+                log.warning("download interrupted (%s), attempt %d", e, attempt + 1)
+                time.sleep(2 + attempt * 3)
+        if last:
+            raise RuntimeError(f"下載中斷，請檢查網路後再按一次 / Download interrupted, check the network and retry: {last}")
+        if sha256:
+            h = hashlib.sha256()
+            with open(part, "rb") as f:
+                for block in iter(lambda: f.read(1 << 20), b""):
+                    h.update(block)
+            if h.hexdigest() != sha256:
+                part.unlink(missing_ok=True)
+                raise RuntimeError("檔案驗證失敗（下載損毀），請再試一次 / Checksum mismatch, please retry")
+        os.replace(part, dest)
+
+
+
+class Installer(Downloader):
+    def __init__(self, present: Dict[str, Callable[[], bool]]):
+        super().__init__()
         self.components: List[Component] = [
             Component("llama", "語言模型引擎 (llama.cpp)", "Model engine (llama.cpp)", 30, present["llama"]),
             Component("cloudflared", "LINE 連線工具 (cloudflared)", "LINE link tool (cloudflared)", 25, present["cloudflared"]),
             Component("embed", "檢索模型 (bge-small-zh)", "Embedding model (bge-small-zh)", 46, present["embed"]),
             Component("chat", "對話模型 (Qwen3.5-4B)", "Chat model (Qwen3.5-4B)", 2615, present["chat"]),
         ]
-        self._job: Dict[str, object] = {"running": False, "done": True, "current": "", "bytes": 0, "total": 0,
-                                        "error": "", "finished": []}
         self._lock = threading.Lock()
 
     # ---- status ------------------------------------------------------------
@@ -149,45 +195,6 @@ class Installer:
         else:
             spec = CHAT_MODEL if cid == "chat" else EMBED_MODEL
             self._download(spec["url"], paths.MODELS_DIR / spec["file"], spec["sha256"])
-
-    # ---- primitives --------------------------------------------------------
-    def _download(self, url: str, dest: Path, sha256: Optional[str] = None) -> None:
-        """Resumable download to dest.part, verified, then atomically renamed."""
-        part = dest.with_suffix(dest.suffix + ".part")
-        last: Optional[Exception] = None
-        for attempt in range(4):
-            try:
-                have = part.stat().st_size if part.exists() else 0
-                headers = {"Range": f"bytes={have}-"} if have else {}
-                with self.http.get(url, headers=headers, stream=True, timeout=30, allow_redirects=True) as r:
-                    if r.status_code == 416:  # already complete
-                        break
-                    r.raise_for_status()
-                    if have and r.status_code != 206:  # server ignored Range: start over
-                        have = 0
-                    total = have + int(r.headers.get("Content-Length", 0))
-                    self._job.update(bytes=have, total=total)
-                    with open(part, "ab" if have else "wb") as f:
-                        for chunk in r.iter_content(1 << 20):
-                            f.write(chunk)
-                            self._job["bytes"] = int(self._job["bytes"]) + len(chunk)  # type: ignore[arg-type]
-                last = None
-                break
-            except (requests.RequestException, OSError) as e:
-                last = e
-                log.warning("download interrupted (%s), attempt %d", e, attempt + 1)
-                time.sleep(2 + attempt * 3)
-        if last:
-            raise RuntimeError(f"下載中斷，請檢查網路後再按一次 / Download interrupted, check the network and retry: {last}")
-        if sha256:
-            h = hashlib.sha256()
-            with open(part, "rb") as f:
-                for block in iter(lambda: f.read(1 << 20), b""):
-                    h.update(block)
-            if h.hexdigest() != sha256:
-                part.unlink(missing_ok=True)
-                raise RuntimeError("檔案驗證失敗（下載損毀），請再試一次 / Checksum mismatch, please retry")
-        os.replace(part, dest)
 
     def _fetch_archive(self, url: str, name: str, dest_dir: Path, must_have: set) -> None:
         tmp = dest_dir / (name + ".download")

@@ -35,7 +35,7 @@ Admin GUI :5050 (127.0.0.1 only, never exposed through the tunnel)
 
 ## Download (for nurses and end users)
 
-Go to the repository's **Releases** page and download `NTULineBot-Setup.exe` (Windows) or `NTULineBot-mac.zip` (Mac). Install, open, press **Fix everything**: the app downloads llama.cpp, cloudflared and the models itself (about 2.7 GB, resumable, checksum-verified). No terminal at any point. The installer is unsigned, so Windows SmartScreen shows "More info, then Run anyway" once; on Mac use right-click, Open.
+Go to the repository's **Releases** page and download `NTULineBot-Setup.exe` (Windows) or `NTULineBot-mac.dmg` (Mac). Install, open, press **Fix everything**: the app downloads llama.cpp, cloudflared and the models itself (about 2.7 GB, resumable, checksum-verified). No terminal at any point. The installer is unsigned, so Windows SmartScreen shows "More info, then Run anyway" once; on Mac use right-click, Open.
 
 Releases are built by GitHub Actions (`.github/workflows/release.yml`) when a tag such as `v1.0.0` is pushed. The Windows installer is made with Inno Setup (`packaging/installer.iss`) from a PyInstaller windowed build (`packaging/NTULineBot.spec`). Installed apps keep user data in `%LOCALAPPDATA%\NTULineBot` (macOS: `~/Library/Application Support/NTULineBot`), so upgrades never touch it.
 
@@ -48,6 +48,11 @@ Releases are built by GitHub Actions (`.github/workflows/release.yml`) when a ta
 5. Press "Start bot". The tunnel URL is registered with LINE automatically.
 
 Upgrading from the old version: on first launch the app imports `.env` LINE credentials and `memory_data/*.txt` into SQLite once. Rebuild the knowledge base after switching the embedding model; the GUI warns when the index was built with a different one.
+
+## Updates and live status
+
+- **Check for updates** (top right) asks GitHub Releases for a newer version; the app also checks every 12 hours (switchable in Settings). On Windows "Update now" downloads the installer, verifies its SHA-256, installs silently and relaunches. On macOS it opens the new `.dmg`. Versions are stamped from the release tag.
+- **Live model light** (top bar): offline, loading, idle, searching, generating (with a queue count). It reads in-flight request counters, so it reflects real activity, including test chats.
 
 ## Self-repair and debugging
 

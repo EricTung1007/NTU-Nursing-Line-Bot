@@ -29,6 +29,7 @@ from .line import LineClient
 from .components import Installer
 from .llm import LlamaServers, LlmClient, find_llama_server, resolve_model
 from .settings import Settings
+from .updater import Updater
 from .tunnel import Tunnel, find_cloudflared
 
 log = logging.getLogger("runtime")
@@ -58,6 +59,7 @@ class Runtime:
         self.started_at: Optional[float] = None
         self.incidents: deque = deque(maxlen=200)   # what the app noticed and did, for the debug page
         self.np = NursePractitioner(self)
+        self.updater = Updater(self.settings)
         ext = lambda: self.settings.get("llm_mode") == "external"  # noqa: E731
         self.installer = Installer({
             "llama": lambda: ext() or bool(find_llama_server(self.settings)),
@@ -208,6 +210,24 @@ class Runtime:
                         snapped = True
             except Exception:
                 log.exception("supervisor loop error")
+
+    def activity(self) -> Dict[str, Any]:
+        """Cheap live state for the status light: offline | loading | idle | searching | generating."""
+        a, h = dict(self.llm.active), self.llm.health_cached()
+        if self.life != Life.RUNNING:
+            state = "offline"
+        elif not h["chat"]:
+            state = "loading"
+        elif a["chat"] > 0:
+            state = "generating"
+        elif a["embed"] > 0:
+            state = "searching"
+        else:
+            state = "idle"
+        last = self.bot.metrics[-1] if self.bot.metrics else None
+        return {"state": state, "chat_ready": h["chat"], "embed_ready": h["embed"], "active": a,
+                "pending": self.dispatcher.pending if self.dispatcher else 0,
+                "last_secs": last["secs"] if last else None, "last_activity": self.llm.last_activity or None}
 
     # ---- GUI status --------------------------------------------------------
     def status(self) -> Dict[str, Any]:

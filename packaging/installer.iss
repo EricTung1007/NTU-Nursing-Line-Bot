@@ -18,6 +18,8 @@ WizardStyle=modern
 OutputDir=..\dist
 OutputBaseFilename=NTULineBot-Setup
 UninstallDisplayName=NTU Nursing LINE Bot
+CloseApplications=yes
+RestartApplications=no
 
 [Files]
 Source: "..\dist\NTULineBot\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
@@ -28,3 +30,5 @@ Name: "{autodesktop}\NTU Nursing LINE Bot"; Filename: "{app}\NTULineBot.exe"
 
 [Run]
 Filename: "{app}\NTULineBot.exe"; Description: "Start NTU Nursing LINE Bot now"; Flags: nowait postinstall skipifsilent
+; In-app updates run the installer silently: relaunch the app afterwards.
+Filename: "{app}\NTULineBot.exe"; Flags: nowait; Check: WizardSilent

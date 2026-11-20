@@ -140,11 +140,13 @@ class Dispatcher:
         self.pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="bot")
         self._locks: Dict[str, threading.Lock] = defaultdict(threading.Lock)
         self._guard = threading.Lock()
+        self.pending = 0  # events accepted but not finished (being answered or waiting for their user's turn)
 
     def submit(self, event: Dict[str, Any]) -> None:
         uid = event.get("source", {}).get("userId", "")
         with self._guard:
             lock = self._locks[uid]
+            self.pending += 1
         self.pool.submit(self._run, event, lock)
 
     def _run(self, event: Dict[str, Any], lock: threading.Lock) -> None:
@@ -153,6 +155,9 @@ class Dispatcher:
                 self.bot.handle_event(event)
             except Exception:
                 log.exception("event handling failed")
+            finally:
+                with self._guard:
+                    self.pending -= 1
 
     def shutdown(self) -> None:
         self.pool.shutdown(wait=False, cancel_futures=True)

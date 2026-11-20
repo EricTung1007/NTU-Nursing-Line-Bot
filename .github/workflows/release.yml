@@ -20,6 +20,11 @@ jobs:
         run: pip install -r requirements.txt -r requirements-gui.txt pyinstaller pytest
       - name: Run tests
         run: python -m pytest -q tests
+      - name: Stamp version
+        shell: pwsh
+        run: |
+          $v = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "0.0.0-dev" }
+          Set-Content -Path nursebot/_version.py -Value "VERSION = `"$v`""
       - name: Build windowed app (no console)
         run: pyinstaller --clean --noconfirm packaging/NTULineBot.spec
       - name: Build installer
@@ -44,14 +49,21 @@ jobs:
         run: pip install -r requirements.txt -r requirements-gui.txt pyinstaller pytest
       - name: Run tests
         run: python -m pytest -q tests
-      - name: Build app bundle
+      - name: Stamp version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then v="${{ github.ref_name }}"; v="${v#v}"; else v="0.0.0-dev"; fi
+          echo "VERSION = \"$v\"" > nursebot/_version.py
+      - name: Build app bundle and dmg
         run: |
           pyinstaller --clean --noconfirm packaging/NTULineBot.spec
-          ditto -c -k --sequesterRsrc --keepParent dist/NTULineBot.app dist/NTULineBot-mac.zip
+          mkdir dmgroot
+          cp -R dist/NTULineBot.app dmgroot/
+          ln -s /Applications dmgroot/Applications
+          hdiutil create -volname "NTU Nursing LINE Bot" -srcfolder dmgroot -ov -format UDZO dist/NTULineBot-mac.dmg
       - uses: actions/upload-artifact@v4
         with:
           name: mac-app
-          path: dist/NTULineBot-mac.zip
+          path: dist/NTULineBot-mac.dmg
 
   publish:
     if: github.ref_type == 'tag'

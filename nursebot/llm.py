@@ -6,6 +6,7 @@ OpenAI-compatible URL instead, which also keeps old LM Studio setups working.
 """
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 import shlex
@@ -172,6 +173,10 @@ class LlmClient:
         self.http = requests.Session()  # keep-alive: no TCP handshake per message
         self._cache: "OrderedDict[str, List[float]]" = OrderedDict()
         self._cache_lock = threading.Lock()
+        self.active = {"chat": 0, "embed": 0}   # requests in flight: drives the live status light
+        self.last_activity = 0.0
+        self._act_lock = threading.Lock()
+        self._hcache: tuple = (0.0, {"chat": False, "embed": False})
 
     def _base(self, kind: str) -> str:
         if self.s.get("llm_mode") == "external":
@@ -180,6 +185,25 @@ class LlmClient:
 
     def _model_name(self, kind: str) -> str:
         return self.s.get(f"{kind}_model_name") if self.s.get("llm_mode") == "external" else "local"
+
+    @contextlib.contextmanager
+    def _busy(self, kind: str):
+        with self._act_lock:
+            self.active[kind] += 1
+        try:
+            yield
+        finally:
+            with self._act_lock:
+                self.active[kind] -= 1
+                self.last_activity = time.time()
+
+    def health_cached(self, ttl: float = 3.0) -> Dict[str, bool]:
+        """health() does network calls; the live status light polls every second or two, so cache briefly."""
+        t, val = self._hcache
+        if time.time() - t > ttl:
+            val = self.health()
+            self._hcache = (time.time(), val)
+        return val
 
     def health(self) -> Dict[str, bool]:
         out = {}
@@ -203,16 +227,18 @@ class LlmClient:
             # Qwen3-style models: skip the thinking phase (replaces the old hand-built <think></think> prompt).
             "chat_template_kwargs": {"enable_thinking": False},
         }
-        r = self.http.post(self._base("chat") + "/v1/chat/completions", json=payload,
-                           timeout=timeout or self.s.int("request_timeout"))
+        with self._busy("chat"):
+            r = self.http.post(self._base("chat") + "/v1/chat/completions", json=payload,
+                               timeout=timeout or self.s.int("request_timeout"))
         r.raise_for_status()
         msg = r.json()["choices"][0]["message"]
         return clean_model_reply((msg.get("content") or "").strip()) or \
             clean_model_reply((msg.get("reasoning_content") or "").strip())
 
     def embed(self, texts: List[str], timeout: int = 60) -> List[List[float]]:
-        r = self.http.post(self._base("embed") + "/v1/embeddings",
-                           json={"input": texts, "model": self._model_name("embed")}, timeout=timeout)
+        with self._busy("embed"):
+            r = self.http.post(self._base("embed") + "/v1/embeddings",
+                               json={"input": texts, "model": self._model_name("embed")}, timeout=timeout)
         r.raise_for_status()
         data = sorted(r.json()["data"], key=lambda d: d.get("index", 0))
         return [d["embedding"] for d in data]

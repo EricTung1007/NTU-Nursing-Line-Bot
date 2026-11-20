@@ -43,6 +43,7 @@ def create_admin_app(rt: Runtime, ring: RingHandler, on_quit: Callable[[], None]
     app = Flask("admin", static_folder=None)
     token = secrets.token_urlsafe(24)
     ui_port = ui_port or rt.settings.int("ui_port")
+    rt.updater.on_quit = on_quit
     allowed_hosts = {f"127.0.0.1:{ui_port}", f"localhost:{ui_port}"}
 
     @app.before_request
@@ -216,6 +217,22 @@ def create_admin_app(rt: Runtime, ring: RingHandler, on_quit: Callable[[], None]
     @app.post("/api/components/install")
     def components_install():
         return jsonify(started=rt.installer.start())
+
+    @app.get("/api/activity")
+    def activity():
+        return jsonify(rt.activity())
+
+    @app.get("/api/update")
+    def update_state():
+        return jsonify(rt.updater.public())
+
+    @app.post("/api/update/check")
+    def update_check():
+        return jsonify(rt.updater.check())
+
+    @app.post("/api/update/install")
+    def update_install():
+        return jsonify(started=rt.updater.install(), **rt.updater.public())
 
     @app.get("/api/incidents")
     def incidents():

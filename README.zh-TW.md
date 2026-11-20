@@ -22,7 +22,7 @@ LINE ──▶ Cloudflare 通道 ──▶ Webhook 伺服器 :5001（僅 /callba
 
 ## 下載（給護理人員與一般使用者）
 
-到專案的 **Releases** 頁面下載 `NTULineBot-Setup.exe`（Windows）或 `NTULineBot-mac.zip`（Mac）。安裝、開啟、按「一鍵修復」：程式會自己下載 llama.cpp、cloudflared 與模型（約 2.7 GB，可續傳並驗證檔案）。全程不需要終端機。安裝檔未經付費簽章，Windows 第一次會出現「其他資訊 → 仍要執行」；Mac 請按右鍵 → 打開。
+到專案的 **Releases** 頁面下載 `NTULineBot-Setup.exe`（Windows）或 `NTULineBot-mac.dmg`（Mac）。安裝、開啟、按「一鍵修復」：程式會自己下載 llama.cpp、cloudflared 與模型（約 2.7 GB，可續傳並驗證檔案）。全程不需要終端機。安裝檔未經付費簽章，Windows 第一次會出現「其他資訊 → 仍要執行」；Mac 請按右鍵 → 打開。
 
 發行檔由 GitHub Actions 在推送 `v1.0.0` 這類標籤時自動建置。安裝後的使用者資料放在 `%LOCALAPPDATA%\NTULineBot`（macOS：`~/Library/Application Support/NTULineBot`），更新程式不會動到。
 
@@ -35,6 +35,11 @@ LINE ──▶ Cloudflare 通道 ──▶ Webhook 伺服器 :5001（僅 /callba
 5. 按「啟動機器人」。通道網址會自動登錄到 LINE。
 
 從舊版升級：首次啟動時，程式會一次性把 `.env` 的 LINE 金鑰與 `memory_data/*.txt` 匯入 SQLite。更換檢索模型後須重建知識庫，介面會在索引與目前模型不一致時提示。
+
+## 更新與即時狀態
+
+- **檢查更新**（右上角）：向 GitHub Releases 查詢新版；程式也每 12 小時自動檢查（可在設定關閉）。Windows 按「立即更新」會下載安裝檔、驗證 SHA-256、靜默安裝並自動重開；Mac 會開啟新的 `.dmg`。版本號由發行標籤自動寫入。
+- **模型即時燈號**（上方）：離線、載入中、待命、檢索中、生成回答中（含排隊數），反映真實的請求進行狀況，測試對話也會顯示。
 
 ## 自動修復與除錯
 
